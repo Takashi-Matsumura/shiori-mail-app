@@ -2,9 +2,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  experimental: {
-    agentFeedback: true,
-  },
   cacheComponents: true,
   // トップは受信トレイへ。ページ内の redirect() だと Cache Components の事前検証がエラーになるため、設定側で転送する
   async redirects() {
