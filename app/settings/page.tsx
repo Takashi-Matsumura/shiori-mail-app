@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { SettingsForm } from "@/components/settings-form";
 import { getActiveAccount, getLocalAccount, getRealAccount } from "@/lib/accounts";
 import { AiError, listModels } from "@/lib/ai/client";
-import { DEFAULT_AI_BASE_URL, getAiConfig, isLoopbackUrl } from "@/lib/ai/config";
+import { DEFAULT_AI_BASE_URL, getAiConfig } from "@/lib/ai/config";
 import { io } from "next/cache";
 
 export default function SettingsPage() {
@@ -24,13 +24,14 @@ async function Settings() {
   const local = getLocalAccount();
   const real = getRealAccount();
   const cfg = getAiConfig();
-  let models: string[] = [];
-  let modelError: string | null = null;
-  try {
-    models = await listModels(cfg);
-  } catch (e) {
-    modelError = e instanceof AiError ? e.message : "モデル一覧を取得できませんでした。";
-  }
+  const separateEmbed = cfg.embedBaseUrl !== cfg.baseUrl;
+  const load = (url: string) =>
+    listModels(url).then(
+      (models) => ({ models, error: null as string | null }),
+      (e) => ({ models: [] as string[], error: e instanceof AiError ? e.message : "モデル一覧を取得できませんでした。" }),
+    );
+  const chat = await load(cfg.baseUrl);
+  const embed = separateEmbed ? await load(cfg.embedBaseUrl) : chat;
   const describe = (a: typeof local) =>
     `IMAP ${a.imap.host}:${a.imap.port}${a.imap.secure ? " (TLS)" : ""} / SMTP ${a.smtp.host}:${a.smtp.port}${a.smtp.secure ? " (TLS)" : ""}`;
   return (
@@ -38,10 +39,19 @@ async function Settings() {
       activeAccount={active.id}
       local={{ email: local.email, servers: describe(local) }}
       real={real ? { email: real.email, servers: describe(real) } : null}
-      ai={{ baseUrl: cfg.baseUrl, chatModel: cfg.chatModel, embedModel: cfg.embedModel, isLocal: isLoopbackUrl(cfg.baseUrl) }}
+      ai={{
+        baseUrl: cfg.baseUrl,
+        embedBaseUrl: separateEmbed ? cfg.embedBaseUrl : "",
+        chatModel: cfg.chatModel,
+        embedModel: cfg.embedModel,
+        thinking: cfg.thinking,
+      }}
       defaultBaseUrl={DEFAULT_AI_BASE_URL}
-      models={models}
-      modelError={modelError}
+      chatModels={chat.models.filter((m) => !/embed/i.test(m))}
+      // 埋め込み専用サーバなら、そこにあるモデルはすべて埋め込み用とみなす
+      embedModels={separateEmbed ? embed.models : embed.models.filter((m) => /embed/i.test(m))}
+      chatError={chat.error}
+      embedError={separateEmbed ? embed.error : null}
     />
   );
 }

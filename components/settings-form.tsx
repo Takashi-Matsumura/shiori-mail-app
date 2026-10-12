@@ -9,10 +9,12 @@ type Props = {
   activeAccount: "local" | "real";
   local: AccountInfo;
   real: AccountInfo | null;
-  ai: { baseUrl: string; chatModel: string; embedModel: string; isLocal: boolean };
+  ai: { baseUrl: string; embedBaseUrl: string; chatModel: string; embedModel: string; thinking: boolean };
   defaultBaseUrl: string;
-  models: string[];
-  modelError: string | null;
+  chatModels: string[];
+  embedModels: string[];
+  chatError: string | null;
+  embedError: string | null;
 };
 
 const inputClass = "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 focus:border-accent focus:outline-none";
@@ -35,12 +37,11 @@ function isLoopback(url: string): boolean {
   }
 }
 
-export function SettingsForm({ activeAccount, local, real, ai, defaultBaseUrl, models, modelError }: Props) {
+export function SettingsForm({ activeAccount, local, real, ai, defaultBaseUrl, chatModels, embedModels, chatError, embedError }: Props) {
   const [state, action, pending] = useActionState<ActionState, FormData>(saveSettingsAction, null);
   const [baseUrl, setBaseUrl] = useState(ai.baseUrl);
-  const external = baseUrl.trim() !== "" && !isLoopback(baseUrl);
-  const chatModels = models.filter((m) => !/embed/i.test(m));
-  const embedModels = models.filter((m) => /embed/i.test(m));
+  const [embedBaseUrl, setEmbedBaseUrl] = useState(ai.embedBaseUrl);
+  const external = [baseUrl, embedBaseUrl].some((u) => u.trim() !== "" && !isLoopback(u));
 
   return (
     <form action={action} className="flex flex-col gap-5">
@@ -74,20 +75,34 @@ export function SettingsForm({ activeAccount, local, real, ai, defaultBaseUrl, m
           <span>ベース URL(OpenAI 互換 API)</span>
           <input name="aiBaseUrl" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={defaultBaseUrl} className={inputClass} autoComplete="off" />
           <span className="text-xs text-muted">
-            LM Studio: http://localhost:1234/v1 ・ Ollama: http://localhost:11434/v1 ・ llama-server: http://localhost:8080/v1
+            llama-server: http://localhost:8080/v1 ・ LM Studio: http://localhost:1234/v1 ・ Ollama: http://localhost:11434/v1
           </span>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span>埋め込み用のベース URL(空欄なら上と同じ)</span>
+          <input name="aiEmbedBaseUrl" value={embedBaseUrl} onChange={(e) => setEmbedBaseUrl(e.target.value)} placeholder="例: http://localhost:8082/v1" className={inputClass} autoComplete="off" />
+          <span className="text-xs text-muted">llama-server はモデルごとにサーバが分かれるので、埋め込みモデルのサーバを別に指定します。</span>
         </label>
         {external ? (
           <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-2 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100">
-            この URL はこのマシンの外です。要約や検索のたびに、メールの本文がその宛先へ送信されます。
+            このマシンの外の URL が含まれています。要約や検索のたびに、メールの本文がその宛先へ送信されます。
           </p>
         ) : null}
-        {modelError ? (
-          <p role="alert" className="text-red-600">{modelError}</p>
+        {chatError || embedError ? (
+          <p role="alert" className="text-red-600">{chatError ?? embedError}</p>
         ) : (
-          <p className="text-xs text-muted">接続できています。利用できるモデル: {models.length} 個</p>
+          <p className="text-xs text-muted">保存済みの接続先に接続できています。URL を変えたら、保存するとモデル一覧が更新されます。</p>
         )}
         <ModelField name="aiChatModel" label="会話用モデル(要約・下書き・仕分け・抽出)" value={ai.chatModel} options={chatModels} />
+        <label className="flex items-start gap-2">
+          <input type="checkbox" name="aiThinking" value="on" defaultChecked={ai.thinking} className="mt-1" />
+          <span>
+            回答の前にモデルに考えさせる(思考モード)
+            <span className="block text-xs text-muted">
+              対応モデルのみ。判断は丁寧になりますが、1 通あたりの待ち時間が数倍〜数十倍に延びます。速さと質の違いを比べる実験用です。
+            </span>
+          </span>
+        </label>
         <ModelField name="aiEmbedModel" label="埋め込み用モデル(意味検索)" value={ai.embedModel} options={embedModels} />
         <p className="text-xs text-muted">埋め込み用モデルを変えたら、検索画面で索引を作り直す必要があります(モデルが違うベクトル同士は比べられません)。</p>
       </fieldset>

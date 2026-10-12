@@ -35,9 +35,9 @@ export function AiPanel({ messageId, threadSize, summary, threadSummary, classif
       ) : null}
       <JsonTask title="仕分け" kind="classify" messageId={messageId} meta={classification?.meta ?? null}>
         {classification?.value ? (
-          <p className="flex items-center gap-2">
+          <p className="flex flex-wrap items-center gap-x-2">
             <CategoryBadge category={classification.value.category} />
-            <span>優先度 {classification.value.priority}</span>
+            <span className="whitespace-nowrap">優先度 {classification.value.priority}</span>
             <span className="text-muted">{classification.value.reason}</span>
           </p>
         ) : null}

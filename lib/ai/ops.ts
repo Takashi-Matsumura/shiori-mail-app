@@ -1,5 +1,5 @@
 import "server-only";
-import { chatJson, embed, resolveModels, AiError, type Usage } from "@/lib/ai/client";
+import { chatJson, embed, resolveEmbedModel, AiError, type Usage } from "@/lib/ai/client";
 import { getAiConfig } from "@/lib/ai/config";
 import {
   classifyPrompt,
@@ -52,7 +52,7 @@ function embeddingText(m: MessageRow): string {
 export async function embedMessage(m: MessageRow): Promise<{ ms: number; summary: string }> {
   const cfg = getAiConfig();
   const started = Date.now();
-  const { embedModel: model } = await resolveModels(cfg);
+  const model = await resolveEmbedModel(cfg);
   const { vectors, model: used } = await embed({ ...cfg, embedModel: model }, [withPrefix(model, "document", embeddingText(m))]);
   getDb()
     .prepare(

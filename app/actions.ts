@@ -101,15 +101,21 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
     return { ok: false, message: "実アカウントは .env.local に設定してから選んでください。" };
   }
   const baseUrl = field("aiBaseUrl");
-  if (baseUrl) {
+  const embedBaseUrl = field("aiEmbedBaseUrl");
+  for (const url of [baseUrl, embedBaseUrl]) {
+    if (!url) continue;
     let valid = false;
     try {
-      valid = ["http:", "https:"].includes(new URL(baseUrl).protocol);
+      const u = new URL(url);
+      // URL に埋め込んだ認証情報(user:pass@)は保存も送信もしない
+      valid = ["http:", "https:"].includes(u.protocol) && !u.username && !u.password;
     } catch {}
     if (!valid) return { ok: false, message: "AI のベース URL は http:// か https:// で始まる URL にしてください。" };
   }
   setSetting("active_account", accountId === "real" ? "real" : "local");
   setSetting("ai_base_url", baseUrl);
+  setSetting("ai_embed_base_url", embedBaseUrl);
+  setSetting("ai_thinking", field("aiThinking") === "on" ? "on" : "off");
   setSetting("ai_chat_model", field("aiChatModel"));
   setSetting("ai_embed_model", field("aiEmbedModel"));
   refresh();

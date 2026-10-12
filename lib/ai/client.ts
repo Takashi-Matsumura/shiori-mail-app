@@ -8,20 +8,35 @@ export class AiError extends Error {}
 
 const CHAT_TIMEOUT_MS = 180_000;
 
-async function request(cfg: AiConfig, path: string, init?: RequestInit, timeoutMs = 30_000): Promise<Response> {
+/**
+ * API キーは、キーと一緒に環境変数で指定された接続先にだけ送る。
+ * 設定画面で URL を書き換えただけで、キーが別のホストへ送られないようにするため。
+ */
+function authHeader(baseUrl: string): Record<string, string> {
+  const key = process.env.AI_API_KEY;
+  if (!key) return {};
+  const trusted = [process.env.AI_BASE_URL, process.env.AI_EMBED_BASE_URL]
+    .filter((u): u is string => !!u)
+    .map((u) => u.replace(/\/+$/, ""));
+  return trusted.includes(baseUrl) ? { Authorization: `Bearer ${key}` } : {};
+}
+
+async function request(baseUrl: string, path: string, init?: RequestInit, timeoutMs = 30_000): Promise<Response> {
   let res: Response;
   try {
-    res = await fetch(`${cfg.baseUrl}${path}`, {
+    res = await fetch(`${baseUrl}${path}`, {
       ...init,
-      headers: { "Content-Type": "application/json", ...(process.env.AI_API_KEY ? { Authorization: `Bearer ${process.env.AI_API_KEY}` } : {}) },
+      headers: { "Content-Type": "application/json", ...authHeader(baseUrl) },
+      // 接続先がリダイレクトで別のホストへ誘導しても追わない
+      redirect: "error",
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
     const timedOut = e instanceof Error && e.name === "TimeoutError";
     throw new AiError(
       timedOut
-        ? `AI サーバ (${cfg.baseUrl}) の応答が時間内に返りませんでした。`
-        : `AI サーバ (${cfg.baseUrl}) に接続できません。LM Studio などのローカルサーバが起動しているか確認してください。`,
+        ? `AI サーバ (${baseUrl}) の応答が時間内に返りませんでした。`
+        : `AI サーバ (${baseUrl}) に接続できません。llama-server や LM Studio などのローカルサーバが起動しているか確認してください。`,
     );
   }
   return res;
@@ -32,8 +47,8 @@ async function failure(res: Response): Promise<AiError> {
   return new AiError(`AI サーバがエラーを返しました (HTTP ${res.status}) ${body}`);
 }
 
-export async function listModels(cfg: AiConfig): Promise<string[]> {
-  const res = await request(cfg, "/models", undefined, 5_000);
+export async function listModels(baseUrl: string): Promise<string[]> {
+  const res = await request(baseUrl, "/models", undefined, 5_000);
   if (!res.ok) throw await failure(res);
   const json = (await res.json()) as { data?: { id: string }[] };
   return (json.data ?? []).map((m) => m.id);
@@ -41,14 +56,17 @@ export async function listModels(cfg: AiConfig): Promise<string[]> {
 
 const isEmbeddingModel = (id: string) => /embed/i.test(id);
 
-/** モデル未設定のとき、接続先の一覧から会話用と埋め込み用を選ぶ。 */
-export async function resolveModels(cfg: AiConfig): Promise<{ chatModel: string; embedModel: string }> {
-  if (cfg.chatModel && cfg.embedModel) return { chatModel: cfg.chatModel, embedModel: cfg.embedModel };
-  const models = await listModels(cfg);
-  return {
-    chatModel: cfg.chatModel || models.find((m) => !isEmbeddingModel(m)) || "",
-    embedModel: cfg.embedModel || models.find(isEmbeddingModel) || "",
-  };
+// モデル未設定のときは、接続先の一覧から会話用と埋め込み用を選ぶ。
+async function resolveChatModel(cfg: AiConfig): Promise<string> {
+  if (cfg.chatModel) return cfg.chatModel;
+  return (await listModels(cfg.baseUrl)).find((m) => !isEmbeddingModel(m)) ?? "";
+}
+
+export async function resolveEmbedModel(cfg: AiConfig): Promise<string> {
+  if (cfg.embedModel) return cfg.embedModel;
+  const models = await listModels(cfg.embedBaseUrl);
+  // 埋め込み専用のサーバなら、そこにあるモデルがそのまま埋め込み用
+  return (cfg.embedBaseUrl !== cfg.baseUrl ? models[0] : models.find(isEmbeddingModel)) ?? "";
 }
 
 /**
@@ -85,15 +103,27 @@ export function stripThink(text: string): string {
   return text.replace(/<think>[\s\S]*?(<\/think>|$)/g, "").trim();
 }
 
+/**
+ * 思考(reasoning)の有無と、それに見合った出力上限。
+ * 思考の分も出力トークンに数えられるので、有効なときは上限を広げないと本題の前に打ち切られる。
+ * chat_template_kwargs は llama-server の指定方法で、対応していない接続先では無視される。
+ */
+function generationParams(cfg: AiConfig, maxTokens: number) {
+  return {
+    max_tokens: cfg.thinking ? maxTokens + 3000 : maxTokens,
+    chat_template_kwargs: { enable_thinking: cfg.thinking },
+  };
+}
+
 type ChatOptions = { temperature?: number; maxTokens?: number };
 export type ChatEvent = { type: "delta"; text: string } | { type: "done"; usage: Usage; model: string };
 
 /** /chat/completions をストリーミングで呼び、本文の断片を順に返す。 */
 export async function* chatStream(cfg: AiConfig, messages: ChatMessage[], opts: ChatOptions = {}): AsyncGenerator<ChatEvent> {
-  const { chatModel } = await resolveModels(cfg);
+  const chatModel = await resolveChatModel(cfg);
   if (!chatModel) throw new AiError("会話用のモデルが見つかりません。設定画面でモデルを選んでください。");
   const res = await request(
-    cfg,
+    cfg.baseUrl,
     "/chat/completions",
     {
       method: "POST",
@@ -101,7 +131,7 @@ export async function* chatStream(cfg: AiConfig, messages: ChatMessage[], opts: 
         model: chatModel,
         messages,
         temperature: opts.temperature ?? 0.3,
-        max_tokens: opts.maxTokens ?? 1500,
+        ...generationParams(cfg, opts.maxTokens ?? 1500),
         stream: true,
         stream_options: { include_usage: true },
       }),
@@ -166,12 +196,12 @@ export async function chatJson(
   schemaName: string,
   schema: object,
 ): Promise<{ value: unknown; usage: Usage; model: string; ms: number }> {
-  const { chatModel } = await resolveModels(cfg);
+  const chatModel = await resolveChatModel(cfg);
   if (!chatModel) throw new AiError("会話用のモデルが見つかりません。設定画面でモデルを選んでください。");
   const started = Date.now();
   const call = (withSchema: boolean) =>
     request(
-      cfg,
+      cfg.baseUrl,
       "/chat/completions",
       {
         method: "POST",
@@ -179,7 +209,7 @@ export async function chatJson(
           model: chatModel,
           messages,
           temperature: 0,
-          max_tokens: 1500,
+          ...generationParams(cfg, 1500),
           ...(withSchema ? { response_format: { type: "json_schema", json_schema: { name: schemaName, strict: true, schema } } } : {}),
         }),
       },
@@ -202,9 +232,9 @@ export async function chatJson(
 
 /** 文章を埋め込みベクトルにする。返すベクトルは長さ 1 に正規化済み(内積がそのままコサイン類似度になる)。 */
 export async function embed(cfg: AiConfig, inputs: string[]): Promise<{ vectors: Float32Array[]; model: string }> {
-  const { embedModel } = await resolveModels(cfg);
+  const embedModel = await resolveEmbedModel(cfg);
   if (!embedModel) throw new AiError("埋め込み用のモデルが見つかりません。設定画面でモデルを選んでください。");
-  const res = await request(cfg, "/embeddings", { method: "POST", body: JSON.stringify({ model: embedModel, input: inputs }) }, 60_000);
+  const res = await request(cfg.embedBaseUrl, "/embeddings", { method: "POST", body: JSON.stringify({ model: embedModel, input: inputs }) }, 60_000);
   if (!res.ok) throw await failure(res);
   const json = (await res.json()) as { data?: { index: number; embedding: number[] }[] };
   const data = [...(json.data ?? [])].sort((a, b) => a.index - b.index);

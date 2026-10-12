@@ -161,11 +161,12 @@ export type PendingCounts = { classify: number; extract: number; embed: number }
 export async function getPendingCounts(account: string): Promise<PendingCounts> {
   await io();
   const db = getDb();
-  const count = (sql: string) => (db.prepare(sql).get(account) as { n: number }).n;
+  const count = (sql: string, ...args: string[]) => (db.prepare(sql).get(account, ...args) as { n: number }).n;
   const missing = (kind: string) =>
     count(
       `SELECT COUNT(*) AS n FROM messages m WHERE m.account = ? AND m.mailbox = 'inbox'
-       AND NOT EXISTS (SELECT 1 FROM ai_results a WHERE a.message_id = m.id AND a.kind = '${kind}')`,
+       AND NOT EXISTS (SELECT 1 FROM ai_results a WHERE a.message_id = m.id AND a.kind = ?)`,
+      kind,
     );
   return {
     classify: missing("classify"),
