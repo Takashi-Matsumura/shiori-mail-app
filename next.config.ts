@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
     agentFeedback: true,
   },
   cacheComponents: true,
+  // Node の net/tls を直接使うメール系ライブラリはバンドルせず、そのまま require させる
+  serverExternalPackages: ["imapflow", "nodemailer", "mailparser"],
   partialPrefetching: true,
   turbopack: {
     rules: {
