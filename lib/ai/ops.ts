@@ -1,6 +1,7 @@
 import "server-only";
 import { chatJson, embed, resolveEmbedModel, AiError, type Usage } from "@/lib/ai/client";
 import { getAiConfig } from "@/lib/ai/config";
+import { classifyWithJev, JevError } from "@/lib/ai/jev";
 import {
   classifyPrompt,
   classifySchema,
@@ -25,8 +26,18 @@ export function saveAiResult(messageId: number, kind: string, model: string, res
     .run(messageId, kind, model, result, ms, usage.promptTokens, usage.completionTokens, Date.now());
 }
 
+async function classifyMessageWithJev(m: MessageRow): Promise<{ ms: number; summary: string }> {
+  const r = await classifyWithJev(m, process.env.TYPESAFE_API_KEY ?? "").catch((e) => {
+    throw e instanceof JevError ? new AiError(e.message) : e;
+  });
+  saveAiResult(m.id, "classify", r.model, JSON.stringify(r.value), r.ms, r.usage);
+  return { ms: r.ms, summary: `${r.value.category} / 優先度 ${r.value.priority}` };
+}
+
 export async function classifyMessage(m: MessageRow): Promise<{ ms: number; summary: string }> {
-  const r = await chatJson(getAiConfig(), classifyPrompt(m), "classification", classifySchema);
+  const cfg = getAiConfig();
+  if (cfg.classifier === "jev") return classifyMessageWithJev(m);
+  const r = await chatJson(cfg, classifyPrompt(m), "classification", classifySchema);
   if (!isClassification(r.value)) throw new AiError("分類結果が想定した形ではありませんでした。");
   saveAiResult(m.id, "classify", r.model, JSON.stringify(r.value), r.ms, r.usage);
   return { ms: r.ms, summary: `${r.value.category} / 優先度 ${r.value.priority}` };

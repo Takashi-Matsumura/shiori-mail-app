@@ -10,7 +10,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "mail:up": "docker compose up -d",
     "mail:down": "docker compose down",
-    "mail:seed": "node scripts/seed.mts"
+    "mail:seed": "node scripts/seed.mts",
+    "ai:compare": "node --env-file=.env.local scripts/compare-classify.mts"
   },
   "dependencies": {
     "imapflow": "^2.4.0",
