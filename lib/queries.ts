@@ -214,3 +214,74 @@ export async function listProtocolLog(limit = 600): Promise<LogRow[]> {
   const rows = getDb().prepare("SELECT * FROM protocol_log ORDER BY id DESC LIMIT ?").all(limit) as LogRow[];
   return rows.reverse();
 }
+
+export type AiRunStat = { kind: string; model: string; count: number; avgMs: number; totalMs: number; promptTokens: number; completionTokens: number };
+
+export type AiStats = {
+  /** 受信トレイの通数(仕分けと抜き出しの対象) */
+  inbox: number;
+  /** 全メールボックスの通数(埋め込みの対象) */
+  all: number;
+  /** 処理の種類とモデルごとの記録 */
+  runs: AiRunStat[];
+  embedded: number;
+  embedModel: string;
+  categories: Record<string, number>;
+  priorities: Record<string, number>;
+  items: Record<string, number>;
+  /** AI に読ませた本文の文字数(1 通を何度処理しても 1 回分として数える) */
+  chars: number;
+};
+
+/** 右パネル用に、AI の処理の記録をまとめて集計する。 */
+export async function getAiStats(account: string): Promise<AiStats> {
+  await io();
+  const db = getDb();
+  const one = <T>(sql: string) => db.prepare(sql).get(account) as T;
+  const runs = db
+    .prepare(
+      `SELECT a.kind, a.model, COUNT(*) AS count, AVG(a.ms) AS avgMs, SUM(a.ms) AS totalMs,
+              COALESCE(SUM(a.prompt_tokens), 0) AS promptTokens, COALESCE(SUM(a.completion_tokens), 0) AS completionTokens
+       FROM ai_results a JOIN messages m ON m.id = a.message_id WHERE m.account = ? GROUP BY a.kind, a.model ORDER BY count DESC`,
+    )
+    .all(account) as AiRunStat[];
+  const results = db
+    .prepare(
+      `SELECT a.kind, a.result FROM ai_results a JOIN messages m ON m.id = a.message_id
+       WHERE m.account = ? AND m.mailbox = 'inbox' AND a.kind IN ('classify', 'extract')`,
+    )
+    .all(account) as { kind: string; result: string }[];
+  const categories: Record<string, number> = {};
+  const priorities: Record<string, number> = {};
+  const items: Record<string, number> = {};
+  const add = (bag: Record<string, number>, key: string | undefined) => {
+    if (key) bag[key] = (bag[key] ?? 0) + 1;
+  };
+  for (const r of results) {
+    if (r.kind === "classify") {
+      const c = parseJson<Classification>(r.result);
+      add(categories, c?.category);
+      add(priorities, c?.priority);
+    } else {
+      for (const item of parseJson<{ items: ExtractedItem[] }>(r.result)?.items ?? []) add(items, item.type);
+    }
+  }
+  const embed = one<{ n: number; model: string | null }>(
+    "SELECT COUNT(*) AS n, MAX(e.model) AS model FROM embeddings e JOIN messages m ON m.id = e.message_id WHERE m.account = ?",
+  );
+  return {
+    inbox: one<{ n: number }>("SELECT COUNT(*) AS n FROM messages WHERE account = ? AND mailbox = 'inbox'").n,
+    all: one<{ n: number }>("SELECT COUNT(*) AS n FROM messages WHERE account = ?").n,
+    runs,
+    embedded: embed.n,
+    embedModel: embed.model ?? "",
+    categories,
+    priorities,
+    items,
+    // プロンプトに入れる本文は先頭 6000 字まで(lib/ai/prompts.ts の BODY_LIMIT)
+    chars: one<{ n: number }>(
+      `SELECT COALESCE(SUM(MIN(LENGTH(m.text), 6000)), 0) AS n FROM messages m
+       WHERE m.account = ? AND EXISTS (SELECT 1 FROM ai_results a WHERE a.message_id = m.id)`,
+    ).n,
+  };
+}

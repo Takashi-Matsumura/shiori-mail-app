@@ -26,3 +26,9 @@ export function bytes(n: number): string {
 export function seconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)} 秒`;
 }
+
+/** 合計時間向けの表記(例: 42 秒 / 11 分 5 秒)。 */
+export function duration(ms: number): string {
+  const s = Math.round(ms / 1000);
+  return s < 60 ? `${s} 秒` : `${Math.floor(s / 60)} 分 ${s % 60} 秒`;
+}

@@ -8,7 +8,7 @@ export async function Sidebar() {
   const account = getActiveAccount();
   const counts = await getCounts(account.id);
   return (
-    <aside className="flex w-52 shrink-0 flex-col gap-4 border-r border-line bg-panel p-3">
+    <div className="flex flex-col gap-4 p-3 pt-0">
       <div>
         <p className="text-xs text-muted">{account.isLocal ? "テストサーバ" : "実アカウント"}</p>
         <p className="truncate font-medium" title={account.email}>
@@ -31,6 +31,6 @@ export async function Sidebar() {
         <NavLink href="/inspector">通信ログ</NavLink>
         <NavLink href="/settings">設定</NavLink>
       </nav>
-    </aside>
+    </div>
   );
 }

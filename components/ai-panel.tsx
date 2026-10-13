@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useId } from "react";
 import { AiMeta } from "@/components/ai-meta";
 import { CategoryBadge } from "@/components/category-badge";
 import type { Classification, ExtractedItem } from "@/lib/ai/prompts";
 import { useAiStream, type StreamMeta } from "@/lib/client/use-ai-stream";
+import { useStoredFlag } from "@/lib/client/use-stored-flag";
 
 type Saved<T> = (T & { meta: StreamMeta }) | null;
 
@@ -19,47 +20,78 @@ type Props = {
 };
 
 export function AiPanel({ messageId, threadSize, summary, threadSummary, classification, extraction }: Props) {
+  const id = useId();
+  // 既定は畳んだ状態。開閉はブラウザに保存し、どのメールでも同じ状態にする
+  const [collapsed, setCollapsed] = useStoredFlag("ai-panel:collapsed", true);
+  const digest = [
+    extraction ? `予定・締切 ${extraction.items.length} 件` : null,
+    summary ? "要約あり" : null,
+    threadSummary ? "スレッド要約あり" : null,
+  ].filter(Boolean);
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-line bg-panel p-4">
-      <h2 className="font-semibold">
-        AI アシスト <span className="text-xs font-normal text-muted">結果は参考情報です。本文で確かめてください。</span>
-      </h2>
-      <StreamedText title="要約" url="/api/ai/summarize" body={{ id: messageId, scope: "message" }} saved={summary} />
-      {threadSize > 1 ? (
-        <StreamedText
-          title={`スレッド要約(${threadSize} 通)`}
-          url="/api/ai/summarize"
-          body={{ id: messageId, scope: "thread" }}
-          saved={threadSummary}
-        />
-      ) : null}
-      <JsonTask title="仕分け" kind="classify" messageId={messageId} meta={classification?.meta ?? null}>
-        {classification?.value ? (
-          <p className="flex flex-wrap items-center gap-x-2">
-            <CategoryBadge category={classification.value.category} />
-            <span className="whitespace-nowrap">優先度 {classification.value.priority}</span>
-            <span className="text-muted">{classification.value.reason}</span>
-          </p>
-        ) : null}
-      </JsonTask>
-      <JsonTask title="予定・締切・やること" kind="extract" messageId={messageId} meta={extraction?.meta ?? null}>
-        {extraction ? (
-          extraction.items.length === 0 ? (
-            <p className="text-muted">該当する項目はありませんでした。</p>
+    <section className="flex flex-col rounded-lg border border-line bg-panel">
+      <h2>
+        <button
+          type="button"
+          onClick={() => setCollapsed(!collapsed)}
+          aria-expanded={!collapsed}
+          aria-controls={id}
+          className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-lg px-4 py-3 text-left hover:bg-background"
+        >
+          <span aria-hidden="true" className="w-3 text-xs text-muted">
+            {collapsed ? "▸" : "▾"}
+          </span>
+          <span className="font-semibold">AI アシスト</span>
+          {collapsed ? (
+            <>
+              {classification?.value ? (
+                <CategoryBadge category={classification.value.category} priority={classification.value.priority} />
+              ) : null}
+              <span className="text-xs text-muted">{digest.length > 0 ? digest.join(" ・ ") : classification?.value ? "" : "まだ処理していません"}</span>
+            </>
           ) : (
-            <ul className="flex flex-col gap-1">
-              {extraction.items.map((item, i) => (
-                <li key={i} className="flex flex-wrap items-baseline gap-2">
-                  <span className="rounded border border-line px-1.5 text-xs">{item.type}</span>
-                  <span className="font-medium">{item.title}</span>
-                  <span className="tabular-nums">{[item.date, item.time].filter(Boolean).join(" ")}</span>
-                  <span className="text-muted">{item.detail}</span>
-                </li>
-              ))}
-            </ul>
-          )
+            <span className="text-xs text-muted">結果は参考情報です。本文で確かめてください。</span>
+          )}
+        </button>
+      </h2>
+      <div id={id} hidden={collapsed} className="flex flex-col gap-3 px-4 pb-4">
+        <StreamedText title="要約" url="/api/ai/summarize" body={{ id: messageId, scope: "message" }} saved={summary} />
+        {threadSize > 1 ? (
+          <StreamedText
+            title={`スレッド要約(${threadSize} 通)`}
+            url="/api/ai/summarize"
+            body={{ id: messageId, scope: "thread" }}
+            saved={threadSummary}
+          />
         ) : null}
-      </JsonTask>
+        <JsonTask title="仕分け" kind="classify" messageId={messageId} meta={classification?.meta ?? null}>
+          {classification?.value ? (
+            <p className="flex flex-wrap items-center gap-x-2">
+              <CategoryBadge category={classification.value.category} />
+              <span className="whitespace-nowrap">優先度 {classification.value.priority}</span>
+              <span className="text-muted">{classification.value.reason}</span>
+            </p>
+          ) : null}
+        </JsonTask>
+        <JsonTask title="予定・締切・やること" kind="extract" messageId={messageId} meta={extraction?.meta ?? null}>
+          {extraction ? (
+            extraction.items.length === 0 ? (
+              <p className="text-muted">該当する項目はありませんでした。</p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {extraction.items.map((item, i) => (
+                  <li key={i} className="flex flex-wrap items-baseline gap-2">
+                    <span className="rounded border border-line px-1.5 text-xs">{item.type}</span>
+                    <span className="font-medium">{item.title}</span>
+                    <span className="tabular-nums">{[item.date, item.time].filter(Boolean).join(" ")}</span>
+                    <span className="text-muted">{item.detail}</span>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : null}
+        </JsonTask>
+      </div>
     </section>
   );
 }
