@@ -71,7 +71,15 @@ export async function registrationOptions() {
   return options;
 }
 
-export async function verifyRegistration(response: RegistrationResponseJSON, origin: string): Promise<boolean> {
+/**
+ * firstOnly は未ログインでの登録(初回)。検証を待つ間に別の登録が先に保存されることがあるので、
+ * 「まだ 1 つも無いとき」の確認と保存を 1 つの INSERT で行い、すでにあれば保存しない。
+ */
+export async function verifyRegistration(
+  response: RegistrationResponseJSON,
+  origin: string,
+  { firstOnly }: { firstOnly: boolean },
+): Promise<boolean> {
   const { verified, registrationInfo } = await verifyRegistrationResponse({
     response,
     expectedChallenge: (c) => consumeChallenge(c, "register"),
@@ -81,16 +89,20 @@ export async function verifyRegistration(response: RegistrationResponseJSON, ori
   });
   if (!verified) return false;
   const { credential } = registrationInfo;
-  getDb()
-    .prepare("INSERT INTO passkeys (id, public_key, counter, transports, created) VALUES (?, ?, ?, ?, ?)")
+  const res = getDb()
+    .prepare(
+      `INSERT INTO passkeys (id, public_key, counter, transports, created) SELECT ?, ?, ?, ?, ?
+       WHERE ? = 0 OR NOT EXISTS (SELECT 1 FROM passkeys)`,
+    )
     .run(
       credential.id,
       credential.publicKey,
       credential.counter,
       credential.transports ? JSON.stringify(credential.transports) : null,
       Date.now(),
+      firstOnly ? 1 : 0,
     );
-  return true;
+  return res.changes === 1;
 }
 
 export async function authenticationOptions() {
