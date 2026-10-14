@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useRef, useState } from "react";
+import { startTransition, useActionState, useEffect, useId, useRef, useState } from "react";
 import { saveSettingsAction, testRealAccountAction, type ActionState } from "@/app/actions";
 
 type AccountInfo = { email: string; servers: string };
@@ -53,7 +53,15 @@ export function SettingsForm({
   chatError,
   embedError,
 }: Props) {
-  const [state, action, pending] = useActionState<ActionState, FormData>(saveSettingsAction, null);
+  // アドレスやサーバは人に見られたくない情報なので、設定済みなら畳んでおく。未設定なら入力できるよう開いておく
+  const [accountOpen, setAccountOpen] = useState(account === null);
+  const accountPanelId = useId();
+  const [state, action, pending] = useActionState<ActionState, FormData>(async (prev, formData) => {
+    const result = await saveSettingsAction(prev, formData);
+    // 入力の誤りはアカウント欄のことが多いので、直せるように開く
+    if (result && !result.ok) setAccountOpen(true);
+    return result;
+  }, null);
   const [baseUrl, setBaseUrl] = useState(ai.baseUrl);
   const [embedBaseUrl, setEmbedBaseUrl] = useState(ai.embedBaseUrl);
   const external = [baseUrl, embedBaseUrl].some((u) => u.trim() !== "" && !isLoopback(u));
@@ -78,11 +86,27 @@ export function SettingsForm({
     >
       <fieldset className="flex flex-col gap-2 rounded-lg border border-line bg-panel p-4">
         <legend className="px-1 font-semibold">メールアカウント</legend>
-        <p className="text-xs text-muted">
-          {account ? `${account.email} ・ ${account.servers}` : "未設定です。下の欄を埋めて保存すると使えます。"}
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-muted">
+            {!account
+              ? "未設定です。下の欄を埋めて保存すると使えます。"
+              : accountOpen
+                ? `${account.email} ・ ${account.servers}`
+                : "設定済みです(内容は隠しています)。"}
+          </p>
+          <button
+            type="button"
+            onClick={() => setAccountOpen(!accountOpen)}
+            aria-expanded={accountOpen}
+            aria-controls={accountPanelId}
+            className="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs hover:bg-background"
+          >
+            {accountOpen ? "隠す" : "表示する"}
+          </button>
+        </div>
 
-        <div className="mt-1 flex flex-col gap-3">
+        {/* 畳んでも入力欄は残す(取り除くと、保存したときにアカウントの設定が空で上書きされる) */}
+        <div id={accountPanelId} hidden={!accountOpen} className="mt-1 flex flex-col gap-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="メールアドレス" name="realEmail" defaultValue={rf.email} type="email" placeholder="you@example.com" />
             <Field label="表示名" name="realName" defaultValue={rf.name} placeholder="山田 太郎" />
