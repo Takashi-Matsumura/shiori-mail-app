@@ -92,7 +92,8 @@ export function SettingsForm({
               ? "未設定です。下の欄を埋めて保存すると使えます。"
               : accountOpen
                 ? `${account.email} ・ ${account.servers}`
-                : "設定済みです(内容は隠しています)。"}
+                : // 畳んでいる間も、どのアカウントかだけは分かるようにする(サーバなどは隠す)
+                  account.email}
           </p>
           <button
             type="button"

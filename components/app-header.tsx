@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useNotices, type Notice } from "@/lib/client/notices";
 
 /** 画面上端の帯。同期や自動処理など、画面のどこから起きたかに関わらず利用者に伝えたいことをここに出す。 */
@@ -9,7 +10,11 @@ export function AppHeader() {
   const others = notices.filter((n) => n.kind !== "error");
   return (
     <header className="flex h-11 shrink-0 items-center gap-4 border-b border-line bg-panel px-4">
-      <p className="shrink-0 font-semibold">Shiori Mail</p>
+      <p className="flex shrink-0 items-center gap-2 font-semibold">
+        {/* app/icon.svg を Next.js が /icon.svg として配信している。名前のすぐ横に置く飾りなので、読み上げでは省く */}
+        <Image src="/icon.svg" alt="" width={24} height={24} unoptimized priority />
+        Shiori Mail
+      </p>
       <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
         {/* 読み上げでは、エラーはすぐに、それ以外は区切りのよいところで伝える */}
         <div role="status" className="flex min-w-0 items-center gap-2">
