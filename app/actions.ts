@@ -5,6 +5,7 @@ import { REAL_SETTING_KEYS, buildRealAccount, getAccount, getRealAccountFields, 
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { saveAiResult } from "@/lib/ai/ops";
 import { CATEGORIES, PRIORITIES } from "@/lib/ai/prompts";
+import { requireSession } from "@/lib/auth/session";
 import { getDb, setSetting } from "@/lib/db";
 import { deletePassword, isStorablePassword, keychainAvailable, writePassword } from "@/lib/keychain";
 import { setSeenFlag, syncAccount, verifyImap, type MailboxSlug } from "@/lib/mail/imap";
@@ -34,6 +35,7 @@ function describeError(e: unknown, target: string): string {
 }
 
 export async function syncAction(): Promise<ActionState> {
+  await requireSession();
   const account = getAccount();
   if (!account) return { ok: false, message: NO_ACCOUNT };
   try {
@@ -46,6 +48,7 @@ export async function syncAction(): Promise<ActionState> {
 }
 
 export async function setSeenAction(mailbox: MailboxSlug, uid: number, seen: boolean): Promise<ActionState> {
+  await requireSession();
   if ((mailbox !== "inbox" && mailbox !== "sent") || !Number.isInteger(uid)) return { ok: false, message: "不正な指定です" };
   const account = getAccount();
   if (!account) return { ok: false, message: NO_ACCOUNT };
@@ -68,6 +71,7 @@ function parseAddressList(value: string): string[] | null {
 }
 
 export async function sendAction(_prev: SendState, formData: FormData): Promise<SendState> {
+  await requireSession();
   const field = (name: string) => String(formData.get(name) ?? "");
   const to = parseAddressList(field("to"));
   const cc = parseAddressList(field("cc"));
@@ -115,6 +119,7 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
 }
 
 export async function saveSettingsAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await requireSession();
   const field = (name: string) => String(formData.get(name) ?? "").trim();
   const real = parseRealAccountForm(formData);
   if (typeof real === "string") return { ok: false, message: real };
@@ -162,6 +167,7 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
 
 /** 画面の入力値(保存前)で、IMAP と SMTP にログインできるかを確かめる。設定は保存しない。 */
 export async function testRealAccountAction(formData: FormData): Promise<ActionState> {
+  await requireSession();
   const real = parseRealAccountForm(formData);
   if (typeof real === "string") return { ok: false, message: real };
   // 入力が無ければ保存済みのものを使う。接続先を変えていれば parseRealAccountForm が入れ直しを求めている
@@ -226,6 +232,7 @@ function parseRealAccountForm(formData: FormData) {
 
 /** 仕分けを確定する(直した場合も、AI の判定をそのまま認めた場合も)。以後の AI の処理では上書きしない。 */
 export async function labelClassificationAction(messageId: number, category: string, priority: string): Promise<ActionState> {
+  await requireSession();
   if (!Number.isInteger(messageId)) return { ok: false, message: "不正な指定です" };
   if (!(CATEGORIES as readonly string[]).includes(category) || !(PRIORITIES as readonly string[]).includes(priority)) {
     return { ok: false, message: "カテゴリか優先度の値が正しくありません。" };
@@ -262,6 +269,7 @@ export async function labelClassificationAction(messageId: number, category: str
 
 /** 確定を外し、まだ仕分けていない状態に戻す(次の自動処理か「実行する」で、改めて AI が仕分ける)。 */
 export async function clearClassificationLabelAction(messageId: number): Promise<ActionState> {
+  await requireSession();
   if (!Number.isInteger(messageId)) return { ok: false, message: "不正な指定です" };
   const db = getDb();
   const owned = db

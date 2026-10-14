@@ -3,6 +3,13 @@
 import Image from "next/image";
 import { useNotices, type Notice } from "@/lib/client/notices";
 
+async function lock() {
+  await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+  // メールの内容を抱えたクライアント側のキャッシュを捨てたいので、ルーターの遷移ではなく読み込み直す
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.assign("/login");
+}
+
 /** 画面上端の帯。同期や自動処理など、画面のどこから起きたかに関わらず利用者に伝えたいことをここに出す。 */
 export function AppHeader() {
   const { notices, dismiss } = useNotices();
@@ -28,6 +35,14 @@ export function AppHeader() {
           ))}
         </div>
       </div>
+      <button
+        type="button"
+        onClick={lock}
+        title="ロックして、次は Touch ID で開く"
+        className="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-muted hover:bg-background hover:text-foreground"
+      >
+        ロック
+      </button>
     </header>
   );
 }

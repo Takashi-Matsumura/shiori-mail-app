@@ -1,3 +1,4 @@
+import { isAuthenticated } from "@/lib/auth/session";
 import { getAccount } from "@/lib/accounts";
 import { chatStream } from "@/lib/ai/client";
 import { getAiConfig } from "@/lib/ai/config";
@@ -8,6 +9,7 @@ import { getMessageById, getThread } from "@/lib/queries";
 
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return new Response("Forbidden", { status: 403 });
+  if (!(await isAuthenticated())) return new Response("Unauthorized", { status: 401 });
   const body = (await request.json().catch(() => null)) as { id?: unknown; scope?: unknown } | null;
   const id = Number(body?.id);
   const scope = body?.scope === "thread" ? "thread" : "message";

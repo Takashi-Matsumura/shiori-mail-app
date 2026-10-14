@@ -1,3 +1,4 @@
+import { isAuthenticated } from "@/lib/auth/session";
 import { getAccount } from "@/lib/accounts";
 import { classifyMessage, embedMessage, extractFromMessage, type BatchKind } from "@/lib/ai/ops";
 import { isSameOrigin, ndjsonResponse } from "@/lib/ai/stream";
@@ -22,6 +23,7 @@ function pendingIds(account: string, kind: BatchKind): number[] {
 
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return new Response("Forbidden", { status: 403 });
+  if (!(await isAuthenticated())) return new Response("Unauthorized", { status: 401 });
   const body = (await request.json().catch(() => null)) as { kind?: unknown; id?: unknown } | null;
   const kind = body?.kind;
   if (kind !== "classify" && kind !== "extract" && kind !== "embed") return new Response("Bad Request", { status: 400 });
