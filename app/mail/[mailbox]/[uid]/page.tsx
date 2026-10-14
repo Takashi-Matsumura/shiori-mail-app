@@ -2,19 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AiPanel } from "@/components/ai-panel";
-import { MessageTabs } from "@/components/message-tabs";
+import { MessageBody } from "@/components/message-body";
 import { SeenControl } from "@/components/seen-control";
-import { getActiveAccount } from "@/lib/accounts";
+import { requireAccount } from "@/lib/accounts";
 import type { Classification, ExtractedItem } from "@/lib/ai/prompts";
 import { bytes, fullDate } from "@/lib/format";
-import { HEADER_NOTES } from "@/lib/mail/header-notes";
 import { MAILBOXES } from "@/lib/mail/imap";
-import { parseHeaderLines, parseRaw, splitRaw } from "@/lib/mail/parse";
+import { parseRaw } from "@/lib/mail/parse";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { getAiResults, getMessage, getThread, type AiResultRow } from "@/lib/queries";
-
-/** 生データ欄に出す上限。添付が大きいメールで画面が固まらないようにする。 */
-const RAW_PREVIEW_LIMIT = 200_000;
 
 export default function MessagePage({ params }: PageProps<"/mail/[mailbox]/[uid]">) {
   return (
@@ -40,19 +36,15 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
   const { mailbox, uid } = await params;
   const box = MAILBOXES.find((b) => b.slug === mailbox);
   if (!box || !/^\d+$/.test(uid)) notFound();
-  const account = getActiveAccount();
+  const account = requireAccount();
   const message = await getMessage(account.id, box.slug, Number(uid));
   if (!message) notFound();
 
-  const raw = Buffer.from(message.raw);
   const [thread, ai, parsed] = await Promise.all([
     getThread(account.id, message.thread_key),
     getAiResults(message.id),
-    parseRaw(raw),
+    parseRaw(Buffer.from(message.raw)),
   ]);
-  const { header } = splitRaw(raw);
-  const headers = parseHeaderLines(header).map((h) => ({ ...h, note: HEADER_NOTES[h.name.toLowerCase()] ?? null }));
-  const rawText = raw.toString("utf8");
 
   return (
     <article className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
@@ -65,8 +57,6 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
               mailbox={box.slug}
               uid={message.uid}
               seen={message.seen === 1}
-              // 実アカウントでは、開いただけでサーバ上のフラグを書き換えない
-              autoMark={account.isLocal && box.slug === "inbox"}
             />
             <Link href={`/compose?reply=${message.id}`} className="rounded-md bg-accent px-3 py-1.5 font-medium text-panel hover:opacity-90">
               返信
@@ -102,14 +92,10 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
         extraction={ai.extract ? { items: parseResult<{ items: ExtractedItem[] }>(ai.extract)?.items ?? [], meta: meta(ai.extract)! } : null}
       />
 
-      <MessageTabs
-        key={`tabs-${message.id}`}
+      <MessageBody
+        key={`body-${message.id}`}
         text={message.text}
         html={message.html}
-        headers={headers}
-        structure={message.structure ? JSON.parse(message.structure) : null}
-        raw={rawText.slice(0, RAW_PREVIEW_LIMIT)}
-        rawTruncated={rawText.length > RAW_PREVIEW_LIMIT}
         size={bytes(message.size)}
         attachments={parsed.attachments.map((a) => ({ ...a, size: bytes(a.size) }))}
       />

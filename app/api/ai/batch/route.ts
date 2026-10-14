@@ -1,4 +1,4 @@
-import { getActiveAccount } from "@/lib/accounts";
+import { getAccount } from "@/lib/accounts";
 import { classifyMessage, embedMessage, extractFromMessage, type BatchKind } from "@/lib/ai/ops";
 import { isSameOrigin, ndjsonResponse } from "@/lib/ai/stream";
 import { getDb } from "@/lib/db";
@@ -26,7 +26,8 @@ export async function POST(request: Request) {
   const kind = body?.kind;
   if (kind !== "classify" && kind !== "extract" && kind !== "embed") return new Response("Bad Request", { status: 400 });
 
-  const account = getActiveAccount();
+  const account = getAccount();
+  if (!account) return new Response("アカウントが未設定です", { status: 409 });
   // id 指定なら 1 通だけ(やり直しを含む)、無ければ未処理をすべて
   const ids = body?.id === undefined ? pendingIds(account.id, kind) : [Number(body.id)];
   if (ids.some((id) => !Number.isInteger(id))) return new Response("Bad Request", { status: 400 });

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { BatchButton } from "@/components/batch-button";
-import { getActiveAccount } from "@/lib/accounts";
+import { requireAccount } from "@/lib/accounts";
 import { AiError } from "@/lib/ai/client";
 import { semanticSearch } from "@/lib/ai/ops";
 import { seconds, shortDate } from "@/lib/format";
@@ -27,7 +27,7 @@ export default function SearchPage({ searchParams }: PageProps<"/search">) {
 async function Search({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim().slice(0, 200) : "";
-  const account = getActiveAccount();
+  const account = requireAccount();
   const pending = await getPendingCounts(account.id);
   return (
     <>

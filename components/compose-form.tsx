@@ -10,7 +10,7 @@ import { useAiStream } from "@/lib/client/use-ai-stream";
 type Props = {
   defaults: { to: string; cc: string; subject: string; body: string; inReplyTo: string; references: string };
   replyTo: { id: number; subject: string; from: string } | null;
-  account: { email: string; name: string; isLocal: boolean; readOnly: boolean };
+  account: { email: string; name: string; readOnly: boolean };
 };
 
 const inputClass = "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 focus:border-accent focus:outline-none";
@@ -70,7 +70,6 @@ export function ComposeForm({ defaults, replyTo, account }: Props) {
         </p>
         <div className="flex gap-3">
           <Link href="/mail/sent" className="text-accent underline">送信済みを見る</Link>
-          <Link href="/inspector" className="text-accent underline">SMTP のやり取りを見る</Link>
           <Link href="/mail/inbox" className="text-accent underline">受信トレイへ戻る</Link>
         </div>
       </div>
@@ -88,7 +87,7 @@ export function ComposeForm({ defaults, replyTo, account }: Props) {
         <span className="text-muted">差出人</span>
         <span>{account.name ? `${account.name} <${account.email}>` : account.email}</span>
         <label htmlFor="to" className="text-muted">宛先</label>
-        <input id="to" name="to" value={to} onChange={(e) => setTo(e.target.value)} className={inputClass} placeholder="someone@example.test" autoComplete="off" />
+        <input id="to" name="to" value={to} onChange={(e) => setTo(e.target.value)} className={inputClass} placeholder="someone@example.com" autoComplete="off" />
         <label htmlFor="cc" className="text-muted">Cc</label>
         <input id="cc" name="cc" value={cc} onChange={(e) => setCc(e.target.value)} className={inputClass} autoComplete="off" />
         <label htmlFor="subject" className="text-muted">件名</label>
@@ -141,16 +140,14 @@ export function ComposeForm({ defaults, replyTo, account }: Props) {
         <p className="rounded-lg border border-line bg-background p-3 text-sm">
           読み取り専用モードなので送信できません。下書きと AI アシストは使えます。送るときは設定画面でモードを外してください。
         </p>
-      ) : !account.isLocal ? (
+      ) : (
         <label className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100">
-          <input type="checkbox" name="confirmReal" value="yes" className="mt-0.5" />
+          <input type="checkbox" name="confirmSend" value="yes" className="mt-0.5" />
           <span>
-            実アカウント({account.email})から <strong>{to || "(宛先未入力)"}</strong>
-            {cc ? <> と Cc の <strong>{cc}</strong></> : null} へ、実際にメールを送信します。
+            {account.email} から <strong>{to || "(宛先未入力)"}</strong>
+            {cc ? <> と Cc の <strong>{cc}</strong></> : null} へ、メールを送信します。
           </span>
         </label>
-      ) : (
-        <p className="text-xs text-muted">テストサーバ宛です。どのアドレスに送っても外部には配送されません。自分({account.email})宛に送ると受信トレイに届きます。</p>
       )}
 
       {state && !state.ok ? <p role="alert" className="text-red-600">{state.message}</p> : null}

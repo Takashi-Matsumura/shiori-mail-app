@@ -6,9 +6,8 @@ import { saveSettingsAction, testRealAccountAction, type ActionState } from "@/a
 type AccountInfo = { email: string; servers: string };
 
 type Props = {
-  activeAccount: "local" | "real";
-  local: AccountInfo;
-  real: AccountInfo | null;
+  /** 設定済みのアカウント。未設定なら null */
+  account: AccountInfo | null;
   realFields: {
     email: string;
     name: string;
@@ -43,9 +42,7 @@ function isLoopback(url: string): boolean {
 }
 
 export function SettingsForm({
-  activeAccount,
-  local,
-  real,
+  account,
   realFields: rf,
   passwordSource,
   keychainAvailable,
@@ -81,25 +78,11 @@ export function SettingsForm({
     >
       <fieldset className="flex flex-col gap-2 rounded-lg border border-line bg-panel p-4">
         <legend className="px-1 font-semibold">メールアカウント</legend>
-        <label className="flex items-start gap-2">
-          <input type="radio" name="account" value="local" defaultChecked={activeAccount === "local"} className="mt-1" />
-          <span>
-            ローカル テストサーバ({local.email})
-            <span className="block text-xs text-muted">{local.servers} ・ 外部には配送されません</span>
-          </span>
-        </label>
-        <label className="flex items-start gap-2">
-          <input type="radio" name="account" value="real" defaultChecked={activeAccount === "real"} className="mt-1" />
-          <span>
-            実アカウント{real ? `(${real.email})` : "(未設定)"}
-            <span className="block text-xs text-muted">
-              {real ? `${real.servers} ・ 送信すると実際に相手へ届きます` : "下の欄を埋めて保存すると使えます"}
-            </span>
-          </span>
-        </label>
+        <p className="text-xs text-muted">
+          {account ? `${account.email} ・ ${account.servers}` : "未設定です。下の欄を埋めて保存すると使えます。"}
+        </p>
 
-        <div className="mt-2 flex flex-col gap-3 border-t border-line pt-3">
-          <p className="font-medium">実アカウントの設定</p>
+        <div className="mt-1 flex flex-col gap-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="メールアドレス" name="realEmail" defaultValue={rf.email} type="email" placeholder="you@example.com" />
             <Field label="表示名" name="realName" defaultValue={rf.name} placeholder="山田 太郎" />

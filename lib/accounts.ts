@@ -1,14 +1,14 @@
 import "server-only";
+import { redirect } from "next/navigation";
 import { getSetting } from "@/lib/db";
 import { readPassword } from "@/lib/keychain";
 
-export type AccountId = "local" | "real";
+/** DB 上の識別子。以前はテストサーバ("local")と区別していた名残で "real" のまま */
+export type AccountId = "real";
 
 export type Account = {
   id: AccountId;
   label: string;
-  /** 外部へ配送されないテストサーバなら true */
-  isLocal: boolean;
   name: string;
   email: string;
   user: string;
@@ -23,22 +23,7 @@ export type Account = {
   readOnly: boolean;
 };
 
-const LOCAL: Account = {
-  id: "local",
-  label: "ローカル テストサーバ",
-  isLocal: true,
-  name: "松村",
-  email: "me@example.test",
-  user: "me@example.test",
-  pass: "password",
-  imap: { host: "127.0.0.1", port: 3143, secure: false },
-  smtp: { host: "127.0.0.1", port: 3025, secure: false },
-  sentMailbox: "Sent",
-  appendSent: true,
-  readOnly: false,
-};
-
-/** 実アカウントの、パスワード以外の設定。画面で入力したもの(DB)を優先し、無ければ .env.local の REAL_* を使う。 */
+/** アカウントの、パスワード以外の設定。画面で入力したもの(DB)を優先し、無ければ .env.local の REAL_* を使う。 */
 export type RealAccountFields = {
   email: string;
   name: string;
@@ -89,7 +74,7 @@ export function getRealPassword(): string | null {
   return readPassword() ?? (process.env.REAL_MAIL_PASSWORD || null);
 }
 
-/** 実アカウントを組み立てる。必須項目が欠けていれば null。 */
+/** アカウントを組み立てる。必須項目が欠けていれば null。 */
 export function getRealAccount(): Account | null {
   const pass = getRealPassword();
   return pass ? buildRealAccount(getRealAccountFields(), pass) : null;
@@ -100,8 +85,7 @@ export function buildRealAccount(f: RealAccountFields, pass: string): Account | 
   if (!f.email || !pass || !f.imapHost || !f.smtpHost) return null;
   return {
     id: "real",
-    label: `実アカウント (${f.email})`,
-    isLocal: false,
+    label: f.email,
     name: f.name,
     email: f.email,
     user: f.user || f.email,
@@ -115,14 +99,14 @@ export function buildRealAccount(f: RealAccountFields, pass: string): Account | 
   };
 }
 
-export function getLocalAccount(): Account {
-  return LOCAL;
+/** 設定済みのアカウント。未設定なら null。 */
+export function getAccount(): Account | null {
+  return getRealAccount();
 }
 
-export function getActiveAccount(): Account {
-  if (getSetting("active_account") === "real") {
-    const real = getRealAccount();
-    if (real) return real;
-  }
-  return LOCAL;
+/** 画面用。アカウントが未設定なら設定画面へ案内する。 */
+export function requireAccount(): Account {
+  const account = getAccount();
+  if (!account) redirect("/settings");
+  return account;
 }

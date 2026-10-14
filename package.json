@@ -9,9 +9,6 @@
     "start": "next start -H 127.0.0.1",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "mail:up": "docker compose up -d",
-    "mail:down": "docker compose down",
-    "mail:seed": "node scripts/seed.mts",
     "ai:eval": "node scripts/eval-classifier.mts"
   },
   "dependencies": {

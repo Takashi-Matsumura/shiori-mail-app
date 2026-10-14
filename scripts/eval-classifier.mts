@@ -1,5 +1,5 @@
 // 近傍法の仕分けの精度を測る。DB には書き込まない。外部へも送らない。
-// 実行: npm run ai:eval [アカウント(local / real)。省略時は設定画面で選んでいるもの]
+// 実行: npm run ai:eval
 //
 // 1 通ずつ「そのメール以外」を手本にして推定し(leave-one-out)、答えと比べる。答えは 2 種類。
 // - あなたが確定した仕分け: 正解。AI(会話用モデルなど)が確定前に出していた判定の正解率も並べる
@@ -24,8 +24,8 @@ if (!hasLabels) {
   console.error("classify_labels がまだありません。開発サーバを一度起動し直してから実行してください。");
   process.exit(1);
 }
-const active = (db.prepare("SELECT value FROM settings WHERE key = 'active_account'").get() as { value: string } | undefined)?.value;
-const account = process.argv[2] ?? active ?? "local";
+// アカウントの識別子は "real" だけ(lib/accounts.ts)
+const account = "real";
 const embedModel = (
   db
     .prepare("SELECT e.model FROM embeddings e JOIN messages m ON m.id = e.message_id WHERE m.account = ? GROUP BY e.model ORDER BY COUNT(*) DESC LIMIT 1")

@@ -1,7 +1,7 @@
 import "server-only";
 import { execFileSync } from "node:child_process";
 
-// 実アカウントのパスワードは DB にも .env.local にも置かず、macOS のキーチェーンに預ける。
+// メールアカウントのパスワードは DB にも .env.local にも置かず、macOS のキーチェーンに預ける。
 // security コマンドを使う。書き込みは -i(標準入力)で渡し、パスワードがプロセス一覧(ps)に出ないようにする。
 
 const SERVICE = "mailer-app";

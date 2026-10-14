@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { SettingsForm } from "@/components/settings-form";
-import { getActiveAccount, getLocalAccount, getRealAccount, getRealAccountFields } from "@/lib/accounts";
+import { getAccount, getRealAccountFields, type Account } from "@/lib/accounts";
 import { keychainAvailable, readPassword } from "@/lib/keychain";
 import { AiError, listModels } from "@/lib/ai/client";
 import { DEFAULT_AI_BASE_URL, getAiConfig } from "@/lib/ai/config";
@@ -21,9 +21,7 @@ export default function SettingsPage() {
 
 async function Settings() {
   await io();
-  const active = getActiveAccount();
-  const local = getLocalAccount();
-  const real = getRealAccount();
+  const account = getAccount();
   // パスワードそのものは画面へ渡さず、どこにあるかだけを伝える
   const passwordSource = readPassword() ? "keychain" : process.env.REAL_MAIL_PASSWORD ? "env" : "none";
   const cfg = getAiConfig();
@@ -35,13 +33,11 @@ async function Settings() {
     );
   const chat = await load(cfg.baseUrl);
   const embed = separateEmbed ? await load(cfg.embedBaseUrl) : chat;
-  const describe = (a: typeof local) =>
+  const describe = (a: Account) =>
     `IMAP ${a.imap.host}:${a.imap.port}${a.imap.secure ? " (TLS)" : ""} / SMTP ${a.smtp.host}:${a.smtp.port}${a.smtp.secure ? " (TLS)" : ""}`;
   return (
     <SettingsForm
-      activeAccount={active.id}
-      local={{ email: local.email, servers: describe(local) }}
-      real={real ? { email: real.email, servers: describe(real) } : null}
+      account={account ? { email: account.email, servers: describe(account) } : null}
       realFields={getRealAccountFields()}
       passwordSource={passwordSource}
       keychainAvailable={keychainAvailable}

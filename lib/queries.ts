@@ -208,14 +208,6 @@ export async function keywordSearch(account: string, query: string): Promise<Sea
   return rows.map((r) => ({ id: r.id, uid: r.uid, mailbox: r.mailbox, subject: r.subject, from: r.from_name || r.from_addr, date: r.date, snippet: r.snippet }));
 }
 
-export type LogRow = { id: number; ts: number; account: string; proto: string; conn: string; dir: string; line: string };
-
-export async function listProtocolLog(limit = 600): Promise<LogRow[]> {
-  await io();
-  const rows = getDb().prepare("SELECT * FROM protocol_log ORDER BY id DESC LIMIT ?").all(limit) as LogRow[];
-  return rows.reverse();
-}
-
 export type AiRunStat = { kind: string; model: string; count: number; avgMs: number; totalMs: number; promptTokens: number; completionTokens: number };
 
 export type AiStats = {

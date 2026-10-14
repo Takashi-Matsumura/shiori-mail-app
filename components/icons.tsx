@@ -53,16 +53,6 @@ export const TasksIcon = () => (
   </Icon>
 );
 
-/** 通信ログ: 行き来する 2 本の矢印 */
-export const LogIcon = () => (
-  <Icon>
-    <path d="M8 3 4 7l4 4" />
-    <path d="M4 7h16" />
-    <path d="m16 21 4-4-4-4" />
-    <path d="M20 17H4" />
-  </Icon>
-);
-
 /** 設定: 歯車 */
 export const SettingsIcon = () => (
   <Icon>

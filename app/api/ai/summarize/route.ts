@@ -1,4 +1,4 @@
-import { getActiveAccount } from "@/lib/accounts";
+import { getAccount } from "@/lib/accounts";
 import { chatStream } from "@/lib/ai/client";
 import { getAiConfig } from "@/lib/ai/config";
 import { saveAiResult } from "@/lib/ai/ops";
@@ -13,7 +13,8 @@ export async function POST(request: Request) {
   const scope = body?.scope === "thread" ? "thread" : "message";
   if (!Number.isInteger(id)) return new Response("Bad Request", { status: 400 });
 
-  const account = getActiveAccount();
+  const account = getAccount();
+  if (!account) return new Response("アカウントが未設定です", { status: 409 });
   const message = await getMessageById(account.id, id);
   if (!message) return new Response("Not Found", { status: 404 });
   const prompt =

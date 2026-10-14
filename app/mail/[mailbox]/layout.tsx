@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { MessageList } from "@/components/message-list";
-import { getActiveAccount } from "@/lib/accounts";
+import { requireAccount } from "@/lib/accounts";
 import { shortDate } from "@/lib/format";
 import { MAILBOXES } from "@/lib/mail/imap";
 import { getPendingCounts, listMessages } from "@/lib/queries";
@@ -21,7 +21,7 @@ async function ListPane({ params }: { params: Promise<{ mailbox: string }> }) {
   const { mailbox } = await params;
   const box = MAILBOXES.find((b) => b.slug === mailbox);
   if (!box) notFound();
-  const account = getActiveAccount();
+  const account = requireAccount();
   const [items, pending] = await Promise.all([listMessages(account.id, box.slug), getPendingCounts(account.id)]);
   return (
     <MessageList

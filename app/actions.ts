@@ -1,7 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { REAL_SETTING_KEYS, buildRealAccount, getActiveAccount, getRealAccount, getRealAccountFields, getRealPassword } from "@/lib/accounts";
+import { REAL_SETTING_KEYS, buildRealAccount, getAccount, getRealAccountFields, getRealPassword } from "@/lib/accounts";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { saveAiResult } from "@/lib/ai/ops";
 import { CATEGORIES, PRIORITIES } from "@/lib/ai/prompts";
@@ -12,12 +12,12 @@ import { sendMail, verifySmtp, type SendResult } from "@/lib/mail/smtp";
 
 export type ActionState = { ok: boolean; message: string } | null;
 
-function describeError(e: unknown, target: string, isLocal: boolean): string {
+const NO_ACCOUNT = "メールアカウントが未設定です。設定画面で登録してください。";
+
+function describeError(e: unknown, target: string): string {
   const code = (e as { code?: string })?.code;
   if (code === "ECONNREFUSED" || code === "NoConnection" || code === "ESOCKET") {
-    return isLocal
-      ? `${target}に接続できません。「npm run mail:up」でテストサーバを起動してください。`
-      : `${target}に接続できません。設定画面のホスト名とポート、ネットワークの状態を確認してください。`;
+    return `${target}に接続できません。設定画面のホスト名とポート、ネットワークの状態を確認してください。`;
   }
   if (code === "EAUTH" || (e as { authenticationFailed?: boolean })?.authenticationFailed) {
     return `${target}の認証に失敗しました。ユーザ名とパスワードを確認してください。`;
@@ -30,29 +30,31 @@ function describeError(e: unknown, target: string, isLocal: boolean): string {
     return `${target}と暗号化した接続を確立できなかったので、パスワードを送らずに止めました。ポート番号を確認してください。`;
   }
   console.error(e);
-  return `${target}との通信でエラーが発生しました。通信ログを確認してください。`;
+  return `${target}との通信でエラーが発生しました。開発サーバのログを確認してください。`;
 }
 
 export async function syncAction(): Promise<ActionState> {
-  const account = getActiveAccount();
+  const account = getAccount();
+  if (!account) return { ok: false, message: NO_ACCOUNT };
   try {
     const count = await syncAccount(account);
     refresh();
     return { ok: true, message: count > 0 ? `${count} 通を取り込みました` : "新着はありません" };
   } catch (e) {
-    return { ok: false, message: describeError(e, "IMAP サーバ", account.isLocal) };
+    return { ok: false, message: describeError(e, "IMAP サーバ") };
   }
 }
 
 export async function setSeenAction(mailbox: MailboxSlug, uid: number, seen: boolean): Promise<ActionState> {
   if ((mailbox !== "inbox" && mailbox !== "sent") || !Number.isInteger(uid)) return { ok: false, message: "不正な指定です" };
-  const account = getActiveAccount();
+  const account = getAccount();
+  if (!account) return { ok: false, message: NO_ACCOUNT };
   try {
     await setSeenFlag(account, mailbox, uid, seen);
     refresh();
     return { ok: true, message: seen ? "既読にしました" : "未読に戻しました" };
   } catch (e) {
-    return { ok: false, message: describeError(e, "IMAP サーバ", account.isLocal) };
+    return { ok: false, message: describeError(e, "IMAP サーバ") };
   }
 }
 
@@ -76,13 +78,14 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
   if (!subject || /[\r\n]/.test(subject)) return { ok: false, message: "件名を入力してください。" };
   if (!text.trim()) return { ok: false, message: "本文を入力してください。" };
 
-  const account = getActiveAccount();
+  const account = getAccount();
+  if (!account) return { ok: false, message: NO_ACCOUNT };
   if (account.readOnly) {
     return { ok: false, message: "読み取り専用モードなので送信しません。送るときは設定画面でモードを外してください。" };
   }
-  // 実アカウントからは本当に相手へ届く。画面の確認チェックをサーバ側でも必須にする。
-  if (!account.isLocal && field("confirmReal") !== "yes") {
-    return { ok: false, message: "実アカウントから送信するには、確認のチェックを入れてください。" };
+  // 送ると本当に相手へ届く。画面の確認チェックをサーバ側でも必須にする。
+  if (field("confirmSend") !== "yes") {
+    return { ok: false, message: "送信するには、確認のチェックを入れてください。" };
   }
 
   let references: string[] = [];
@@ -103,7 +106,7 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
       references,
     });
   } catch (e) {
-    return { ok: false, message: describeError(e, "SMTP サーバ", account.isLocal) };
+    return { ok: false, message: describeError(e, "SMTP サーバ") };
   }
   // 自分宛のメールや送信済みの控えをすぐ一覧に出す
   await syncAccount(account).catch(() => {});
@@ -113,7 +116,6 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
 
 export async function saveSettingsAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const field = (name: string) => String(formData.get(name) ?? "").trim();
-  const accountId = field("account");
   const real = parseRealAccountForm(formData);
   if (typeof real === "string") return { ok: false, message: real };
   const baseUrl = field("aiBaseUrl");
@@ -145,11 +147,6 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
   for (const [key, settingKey] of Object.entries(REAL_SETTING_KEYS)) {
     setSetting(settingKey, String(real.fields[key as keyof typeof real.fields]));
   }
-  if (accountId === "real" && !getRealAccount()) {
-    setSetting("active_account", "local");
-    return { ok: false, message: "実アカウントの設定は保存しましたが、アドレス・パスワード・IMAP / SMTP のホスト名がそろっていないので、テストサーバのままにしました。" };
-  }
-  setSetting("active_account", accountId === "real" ? "real" : "local");
   setSetting("ai_base_url", baseUrl);
   setSetting("ai_embed_base_url", embedBaseUrl);
   setSetting("ai_thinking", field("aiThinking") === "on" ? "on" : "off");
@@ -157,6 +154,9 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
   setSetting("ai_chat_model", field("aiChatModel"));
   setSetting("ai_embed_model", field("aiEmbedModel"));
   refresh();
+  if (!getAccount()) {
+    return { ok: true, message: "保存しました。メールを使うには、アドレス・パスワード・IMAP / SMTP のサーバをすべて入力してください。" };
+  }
   return { ok: true, message: "保存しました" };
 }
 
@@ -170,7 +170,7 @@ export async function testRealAccountAction(formData: FormData): Promise<ActionS
   const check = (target: string, run: Promise<void>) =>
     run.then(
       () => ({ ok: true, line: `${target}: ログインできました` }),
-      (e: unknown) => ({ ok: false, line: describeError(e, target, false) }),
+      (e: unknown) => ({ ok: false, line: describeError(e, target) }),
     );
   const results = await Promise.all([check("IMAP サーバ", verifyImap(account)), check("SMTP サーバ", verifySmtp(account))]);
   return { ok: results.every((r) => r.ok), message: results.map((r) => r.line).join("\n") };
@@ -178,7 +178,7 @@ export async function testRealAccountAction(formData: FormData): Promise<ActionS
 
 const HOST_PATTERN = /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$/;
 
-/** 設定画面の実アカウント欄を読み、確かめる。おかしければ利用者向けの文面を返す。 */
+/** 設定画面のメールアカウント欄を読み、確かめる。おかしければ利用者向けの文面を返す。 */
 function parseRealAccountForm(formData: FormData) {
   const field = (name: string) => String(formData.get(name) ?? "").trim();
   const port = (name: string, fallback: number) => {
@@ -232,7 +232,9 @@ export async function labelClassificationAction(messageId: number, category: str
   }
   const db = getDb();
   // ほかのアカウントのメールは触らない
-  const owned = db.prepare("SELECT 1 FROM messages WHERE id = ? AND account = ?").get(messageId, getActiveAccount().id);
+  const account = getAccount();
+  if (!account) return { ok: false, message: NO_ACCOUNT };
+  const owned = db.prepare("SELECT 1 FROM messages WHERE id = ? AND account = ?").get(messageId, account.id);
   if (!owned) return { ok: false, message: "メールが見つかりません。" };
   const ai = db.prepare("SELECT model, result FROM ai_results WHERE message_id = ? AND kind = 'classify'").get(messageId) as
     | { model: string; result: string }
@@ -264,15 +266,10 @@ export async function clearClassificationLabelAction(messageId: number): Promise
   const db = getDb();
   const owned = db
     .prepare("SELECT 1 FROM classify_labels l JOIN messages m ON m.id = l.message_id WHERE l.message_id = ? AND m.account = ?")
-    .get(messageId, getActiveAccount().id);
+    .get(messageId, getAccount()?.id ?? "");
   if (!owned) return { ok: false, message: "確定した仕分けが見つかりません。" };
   db.prepare("DELETE FROM classify_labels WHERE message_id = ?").run(messageId);
   db.prepare("DELETE FROM ai_results WHERE message_id = ? AND kind = 'classify'").run(messageId);
   refresh();
   return { ok: true, message: "確定を外しました" };
-}
-
-export async function clearLogAction(): Promise<void> {
-  getDb().exec("DELETE FROM protocol_log");
-  refresh();
 }

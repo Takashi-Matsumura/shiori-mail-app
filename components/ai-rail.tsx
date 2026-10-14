@@ -1,4 +1,4 @@
-import { getActiveAccount } from "@/lib/accounts";
+import { getAccount } from "@/lib/accounts";
 import { getAiConfig, isLoopbackUrl } from "@/lib/ai/config";
 import { ITEM_TYPES } from "@/lib/ai/prompts";
 import { getAiStats } from "@/lib/queries";
@@ -6,7 +6,9 @@ import { getAiStats } from "@/lib/queries";
 /** 畳んだ右パネルに出す帯。処理の進み具合と、要点の数字だけを縦に並べる。 */
 export async function AiRail() {
   const cfg = getAiConfig();
-  const stats = await getAiStats(getActiveAccount().id);
+  const account = getAccount();
+  if (!account) return null;
+  const stats = await getAiStats(account.id);
   const countOf = (kind: string) => stats.runs.filter((r) => r.kind === kind).reduce((n, r) => n + r.count, 0);
   const classified = countOf("classify");
   const high = stats.priorities["高"] ?? 0;

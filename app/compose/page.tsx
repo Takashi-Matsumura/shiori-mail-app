@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { ComposeForm } from "@/components/compose-form";
-import { getActiveAccount } from "@/lib/accounts";
+import { requireAccount } from "@/lib/accounts";
 import { fullDate } from "@/lib/format";
 import { getMessageById } from "@/lib/queries";
 
@@ -16,7 +16,7 @@ export default function ComposePage({ searchParams }: PageProps<"/compose">) {
 
 async function Compose({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { reply } = await searchParams;
-  const account = getActiveAccount();
+  const account = requireAccount();
   const replyId = typeof reply === "string" && /^\d+$/.test(reply) ? Number(reply) : null;
   const original = replyId ? await getMessageById(account.id, replyId) : null;
 
@@ -40,7 +40,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       key={replyId ?? "new"}
       defaults={defaults}
       replyTo={original ? { id: original.id, subject: original.subject, from: original.from_name || original.from_addr } : null}
-      account={{ email: account.email, name: account.name, isLocal: account.isLocal, readOnly: account.readOnly }}
+      account={{ email: account.email, name: account.name, readOnly: account.readOnly }}
     />
   );
 }

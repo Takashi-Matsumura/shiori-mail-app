@@ -9,7 +9,7 @@ export const KNN_MIN_EXAMPLES = 20;
 export const KNN_CONFIDENCE = 0.7;
 /**
  * いちばん近いメールでもこれより似ていなければ、見たことのない種類のメールとみなして推定しない。
- * テストサーバの 25 通での評価(npm run ai:eval)では、0.6 だと採用した分の 4 割が会話用モデルと食い違ったので、慎重にしておく。
+ * 架空のサンプルメール 25 通での評価(npm run ai:eval)では、0.6 だと採用した分の 4 割が会話用モデルと食い違ったので、慎重にしておく。
  */
 export const KNN_MIN_SIMILARITY = 0.7;
 /** あなたが確定した仕分けは、AI の判定より重く数える */

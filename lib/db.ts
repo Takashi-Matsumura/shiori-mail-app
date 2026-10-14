@@ -49,15 +49,8 @@ CREATE TABLE IF NOT EXISTS embeddings (
   vector BLOB NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS protocol_log (
-  id INTEGER PRIMARY KEY,
-  ts INTEGER NOT NULL,
-  account TEXT NOT NULL,
-  proto TEXT NOT NULL,
-  conn TEXT NOT NULL DEFAULT '',
-  dir TEXT NOT NULL,
-  line TEXT NOT NULL
-);
+-- 以前あった通信ログ。実メールの本文も記録していたので、残っていれば消す
+DROP TABLE IF EXISTS protocol_log;
 
 -- あなたが確定した仕分け(正解)。ai_* は確定した時点で AI が出していた判定で、AI の正解率を測るのに使う
 CREATE TABLE IF NOT EXISTS classify_labels (

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { BatchButton } from "@/components/batch-button";
-import { getActiveAccount } from "@/lib/accounts";
+import { requireAccount } from "@/lib/accounts";
 import { listTasks } from "@/lib/queries";
 
 export default function TasksPage() {
@@ -21,7 +21,7 @@ export default function TasksPage() {
 }
 
 async function Tasks() {
-  const account = getActiveAccount();
+  const account = requireAccount();
   const { tasks, pending, done } = await listTasks(account.id);
   return (
     <>

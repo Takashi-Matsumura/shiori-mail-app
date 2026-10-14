@@ -60,24 +60,3 @@ export async function parseRaw(raw: Buffer): Promise<ParsedMail> {
   };
 }
 
-/** 生データをヘッダ部と本文部に分ける(最初の空行が境界)。 */
-export function splitRaw(raw: Buffer): { header: string; body: string } {
-  const text = raw.toString("utf8");
-  const m = /\r?\n\r?\n/.exec(text);
-  if (!m) return { header: text, body: "" };
-  return { header: text.slice(0, m.index), body: text.slice(m.index + m[0].length) };
-}
-
-/** 折り返し(継続行)を畳んで、ヘッダを名前と値の並びにする。 */
-export function parseHeaderLines(header: string): { name: string; value: string }[] {
-  const out: { name: string; value: string }[] = [];
-  for (const line of header.split(/\r?\n/)) {
-    if (/^[ \t]/.test(line) && out.length > 0) {
-      out[out.length - 1].value += " " + line.trim();
-      continue;
-    }
-    const i = line.indexOf(":");
-    if (i > 0) out.push({ name: line.slice(0, i), value: line.slice(i + 1).trim() });
-  }
-  return out;
-}

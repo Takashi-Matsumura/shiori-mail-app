@@ -3,7 +3,6 @@ import { ImapFlow } from "imapflow";
 import type { Account } from "@/lib/accounts";
 import { getDb, getSetting, setSetting } from "@/lib/db";
 import { parseRaw } from "@/lib/mail/parse";
-import { recordProtocol } from "@/lib/mail/protocol-log";
 
 export type MailboxSlug = "inbox" | "sent";
 export const MAILBOXES: { slug: MailboxSlug; label: string }[] = [
@@ -11,20 +10,8 @@ export const MAILBOXES: { slug: MailboxSlug; label: string }[] = [
   { slug: "sent", label: "送信済み" },
 ];
 
-/** 初回同期で取り込む上限。実アカウントの大きなメールボックスを丸ごと落とさないため。 */
+/** 初回同期で取り込む上限。大きなメールボックスを丸ごと落とさないため。 */
 const INITIAL_LIMIT = 100;
-
-type LogEntry = { src?: string; msg?: string; cid?: string; err?: unknown };
-
-/** imapflow のログを通信ログへ流すロガー。認証行は imapflow 側でも伏せられる。 */
-function protocolLogger(accountId: string) {
-  const write = (entry: LogEntry) => {
-    if (!entry || typeof entry.msg !== "string") return;
-    const dir = entry.src === "c" ? "C" : entry.src === "s" ? "S" : "-";
-    recordProtocol(accountId, "imap", entry.cid ?? "", dir, entry.msg);
-  };
-  return { trace: () => {}, debug: write, info: write, warn: write, error: write };
-}
 
 async function withImap<T>(
   account: Account,
@@ -36,10 +23,10 @@ async function withImap<T>(
     host: account.imap.host,
     port: account.imap.port,
     secure: account.imap.secure,
-    // 実アカウントでは、STARTTLS を剥がされても平文のままパスワードを送らない
-    doSTARTTLS: account.isLocal || account.imap.secure ? undefined : true,
+    // STARTTLS を剥がされても、平文のままパスワードを送らない
+    doSTARTTLS: account.imap.secure ? undefined : true,
     auth: { user: account.user, pass: account.pass },
-    logger: protocolLogger(account.id),
+    logger: false,
   });
   // 接続後の切断などで飛ぶ 'error' を拾わないとプロセスごと落ちる
   client.on("error", () => {});
@@ -60,14 +47,14 @@ async function resolvePath(client: ImapFlow, account: Account, slug: MailboxSlug
   if (slug === "inbox") return "INBOX";
   const boxes = await client.list();
   if (account.sentMailbox) {
+    // 無くても作らない(読み取り専用モードでもサーバへ書き込まないため)
     if (!boxes.some((b) => b.path === account.sentMailbox)) {
-      // テストサーバには送信済みフォルダが無いので作る
-      await client.mailboxCreate(account.sentMailbox);
+      throw new Error(`送信済みフォルダ「${account.sentMailbox}」がサーバにありません。設定画面のフォルダ名を確認してください。`);
     }
     return account.sentMailbox;
   }
   const sent = boxes.find((b) => b.specialUse === "\\Sent");
-  if (!sent) throw new Error("送信済みフォルダが見つかりません。REAL_SENT_MAILBOX で指定してください。");
+  if (!sent) throw new Error("送信済みフォルダが見つかりません。設定画面の「送信済みフォルダ名」で指定してください。");
   return sent.path;
 }
 

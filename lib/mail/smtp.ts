@@ -1,10 +1,8 @@
 import "server-only";
-import { format } from "node:util";
 import nodemailer from "nodemailer";
 import MailComposer from "nodemailer/lib/mail-composer";
 import type { Account } from "@/lib/accounts";
 import { appendToSent } from "@/lib/mail/imap";
-import { recordProtocol } from "@/lib/mail/protocol-log";
 
 export type OutgoingMail = {
   to: string;
@@ -25,32 +23,15 @@ export type SendResult = {
   appended: boolean | null;
 };
 
-let connSeq = 0;
-
-/** nodemailer のログを通信ログへ流すロガー。AUTH の中身は nodemailer 側でも伏せられる。 */
-function protocolLogger(accountId: string, conn: string) {
-  const write = (entry: { tnx?: string }, message?: unknown, ...args: unknown[]) => {
-    if (typeof message !== "string") return;
-    // tnx: "message" は DATA のあとにクライアントが送るメール本体
-    const dir = entry?.tnx === "client" || entry?.tnx === "message" ? "C" : entry?.tnx === "server" ? "S" : "-";
-    recordProtocol(accountId, "smtp", conn, dir, format(message, ...args));
-  };
-  const noop = () => {};
-  return { level: noop, trace: noop, debug: write, info: write, warn: write, error: write, fatal: write };
-}
-
 function createTransport(account: Account, timeouts: { connectionTimeout?: number; greetingTimeout?: number } = {}) {
   return nodemailer.createTransport({
     ...timeouts,
     host: account.smtp.host,
     port: account.smtp.port,
     secure: account.smtp.secure,
-    // 実アカウントでは、STARTTLS を剥がされても平文のままパスワードを送らない
-    requireTLS: !account.isLocal && !account.smtp.secure,
-    // テストサーバは認証なしで受け付ける
-    auth: account.isLocal ? undefined : { user: account.user, pass: account.pass },
-    logger: protocolLogger(account.id, `smtp-${++connSeq}`),
-    debug: true,
+    // STARTTLS を剥がされても、平文のままパスワードを送らない
+    requireTLS: !account.smtp.secure,
+    auth: { user: account.user, pass: account.pass },
   });
 }
 

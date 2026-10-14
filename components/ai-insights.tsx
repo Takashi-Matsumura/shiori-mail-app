@@ -1,4 +1,4 @@
-import { getActiveAccount } from "@/lib/accounts";
+import { getAccount } from "@/lib/accounts";
 import { getAiConfig, isLoopbackUrl } from "@/lib/ai/config";
 import { CATEGORIES, ITEM_TYPES } from "@/lib/ai/prompts";
 import { duration, seconds } from "@/lib/format";
@@ -18,7 +18,8 @@ const sum = (rows: AiRunStat[], key: "count" | "totalMs" | "promptTokens" | "com
 
 /** 右パネル。ローカル AI がどこまで処理したかと、その結果どれだけ手間が減ったかを数字で見せる。 */
 export async function AiInsights() {
-  const account = getActiveAccount();
+  const account = getAccount();
+  if (!account) return <p className="p-4 pt-0 text-xs text-muted">メールアカウントを設定すると、AI の処理状況がここに表示されます。</p>;
   const cfg = getAiConfig();
   const stats = await getAiStats(account.id);
   const countOf = (kind: string) => sum(stats.runs.filter((r) => r.kind === kind), "count");

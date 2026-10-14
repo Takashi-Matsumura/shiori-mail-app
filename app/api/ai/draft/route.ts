@@ -1,4 +1,4 @@
-import { getActiveAccount } from "@/lib/accounts";
+import { getAccount } from "@/lib/accounts";
 import { chatStream } from "@/lib/ai/client";
 import { getAiConfig } from "@/lib/ai/config";
 import { draftPrompt, TONES } from "@/lib/ai/prompts";
@@ -11,7 +11,8 @@ export async function POST(request: Request) {
   const instruction = typeof body?.instruction === "string" ? body.instruction.slice(0, 1000) : "";
   const tone = TONES.find((t) => t === body?.tone) ?? TONES[0];
 
-  const account = getActiveAccount();
+  const account = getAccount();
+  if (!account) return new Response("アカウントが未設定です", { status: 409 });
   const replyTo = Number(body?.replyTo);
   const original = Number.isInteger(replyTo) ? await getMessageById(account.id, replyTo) : null;
   if (!original && !instruction.trim()) return new Response("Bad Request", { status: 400 });
