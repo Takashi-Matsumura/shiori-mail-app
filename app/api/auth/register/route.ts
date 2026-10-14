@@ -11,18 +11,19 @@ import { SESSION_COOKIE, createSession, isAuthenticated, sessionCookieOptions } 
 export async function POST(request: Request) {
   const origin = passkeyOrigin(request);
   if (!origin) return new Response("Forbidden", { status: 403 });
-  if (hasPasskeys() && !(await isAuthenticated())) return new Response("Unauthorized", { status: 401 });
+  const authenticated = await isAuthenticated();
+  if (hasPasskeys() && !authenticated) return new Response("Unauthorized", { status: 401 });
 
   const body = (await request.json().catch(() => null)) as { step?: unknown; response?: unknown } | null;
   if (body?.step === "options") return Response.json(await registrationOptions());
   if (body?.step !== "verify" || !body.response) return new Response("Bad Request", { status: 400 });
 
-  const ok = await verifyRegistration(body.response as RegistrationResponseJSON, origin).catch((e) => {
+  const ok = await verifyRegistration(body.response as RegistrationResponseJSON, origin, { firstOnly: !authenticated }).catch((e) => {
     console.error(e);
     return false;
   });
   if (!ok) return Response.json({ ok: false, message: "パスキーを登録できませんでした。もう一度お試しください。" }, { status: 400 });
   // 初回の登録は、そのままログインした扱いにする
-  if (!(await isAuthenticated())) (await cookies()).set(SESSION_COOKIE, createSession(), sessionCookieOptions);
+  if (!authenticated) (await cookies()).set(SESSION_COOKIE, createSession(), sessionCookieOptions);
   return Response.json({ ok: true });
 }
