@@ -51,6 +51,7 @@ async function Settings() {
         chatModel: cfg.chatModel,
         embedModel: cfg.embedModel,
         thinking: cfg.thinking,
+        classifyKnn: cfg.classifyKnn,
       }}
       defaultBaseUrl={DEFAULT_AI_BASE_URL}
       chatModels={chat.models.filter((m) => !/embed/i.test(m))}

@@ -1,5 +1,6 @@
 import "server-only";
 import { io } from "next/cache";
+import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { getDb } from "@/lib/db";
 import type { MailboxSlug } from "@/lib/mail/imap";
 import type { Classification, ExtractedItem } from "@/lib/ai/prompts";
@@ -242,7 +243,7 @@ export async function getAiStats(account: string): Promise<AiStats> {
     .prepare(
       `SELECT a.kind, a.model, COUNT(*) AS count, AVG(a.ms) AS avgMs, SUM(a.ms) AS totalMs,
               COALESCE(SUM(a.prompt_tokens), 0) AS promptTokens, COALESCE(SUM(a.completion_tokens), 0) AS completionTokens
-       FROM ai_results a JOIN messages m ON m.id = a.message_id WHERE m.account = ? GROUP BY a.kind, a.model ORDER BY count DESC`,
+       FROM ai_results a JOIN messages m ON m.id = a.message_id WHERE m.account = ? AND a.model != '${USER_LABEL_MODEL}' GROUP BY a.kind, a.model ORDER BY count DESC`,
     )
     .all(account) as AiRunStat[];
   const results = db

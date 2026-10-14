@@ -11,10 +11,11 @@ const INTERVAL_MS = 5 * 60_000;
 // 開閉の保存値を読み終える前に走り出さないよう、最初の 1 回は少し待つ
 const FIRST_DELAY_MS = 3_000;
 
+// 仕分けは似たメールの埋め込みを使うので、索引づくりを先に済ませる
 const STEPS = [
+  { kind: "embed", label: "検索用の索引" },
   { kind: "classify", label: "仕分け" },
   { kind: "extract", label: "予定の抜き出し" },
-  { kind: "embed", label: "検索用の索引" },
 ] as const;
 
 /** 未処理のメールを 1 種類ぶん AI にかける。失敗したらその文言を返す。 */

@@ -2,6 +2,9 @@
 
 import { refresh } from "next/cache";
 import { REAL_SETTING_KEYS, buildRealAccount, getActiveAccount, getRealAccount, getRealAccountFields, getRealPassword } from "@/lib/accounts";
+import { USER_LABEL_MODEL } from "@/lib/ai/knn";
+import { saveAiResult } from "@/lib/ai/ops";
+import { CATEGORIES, PRIORITIES } from "@/lib/ai/prompts";
 import { getDb, setSetting } from "@/lib/db";
 import { deletePassword, isStorablePassword, keychainAvailable, writePassword } from "@/lib/keychain";
 import { setSeenFlag, syncAccount, verifyImap, type MailboxSlug } from "@/lib/mail/imap";
@@ -150,6 +153,7 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
   setSetting("ai_base_url", baseUrl);
   setSetting("ai_embed_base_url", embedBaseUrl);
   setSetting("ai_thinking", field("aiThinking") === "on" ? "on" : "off");
+  setSetting("ai_classify_knn", field("aiClassifyKnn") === "on" ? "on" : "off");
   setSetting("ai_chat_model", field("aiChatModel"));
   setSetting("ai_embed_model", field("aiEmbedModel"));
   refresh();
@@ -218,6 +222,54 @@ function parseRealAccountForm(formData: FormData) {
     return "接続先かログイン名を変えたときは、パスワードも入れ直してください。";
   }
   return { fields, password, forgetPassword };
+}
+
+/** 仕分けを確定する(直した場合も、AI の判定をそのまま認めた場合も)。以後の AI の処理では上書きしない。 */
+export async function labelClassificationAction(messageId: number, category: string, priority: string): Promise<ActionState> {
+  if (!Number.isInteger(messageId)) return { ok: false, message: "不正な指定です" };
+  if (!(CATEGORIES as readonly string[]).includes(category) || !(PRIORITIES as readonly string[]).includes(priority)) {
+    return { ok: false, message: "カテゴリか優先度の値が正しくありません。" };
+  }
+  const db = getDb();
+  // ほかのアカウントのメールは触らない
+  const owned = db.prepare("SELECT 1 FROM messages WHERE id = ? AND account = ?").get(messageId, getActiveAccount().id);
+  if (!owned) return { ok: false, message: "メールが見つかりません。" };
+  const ai = db.prepare("SELECT model, result FROM ai_results WHERE message_id = ? AND kind = 'classify'").get(messageId) as
+    | { model: string; result: string }
+    | undefined;
+  const existing = db.prepare("SELECT 1 FROM classify_labels WHERE message_id = ?").get(messageId);
+  // 確定し直すときは、最初に確定したときの AI の判定を残す(2 回目以降は「あなた」の結果しか残っていないため)
+  if (!existing) {
+    let aiValue: { category?: string; priority?: string } = {};
+    try {
+      if (ai && ai.model !== USER_LABEL_MODEL) aiValue = JSON.parse(ai.result);
+    } catch {}
+    db.prepare(
+      "INSERT INTO classify_labels (message_id, category, priority, ai_model, ai_category, ai_priority, created) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ).run(messageId, category, priority, ai && ai.model !== USER_LABEL_MODEL ? ai.model : null, aiValue.category ?? null, aiValue.priority ?? null, Date.now());
+  } else {
+    db.prepare("UPDATE classify_labels SET category = ?, priority = ? WHERE message_id = ?").run(category, priority, messageId);
+  }
+  saveAiResult(messageId, "classify", USER_LABEL_MODEL, JSON.stringify({ category, priority, reason: "あなたが確定" }), 0, {
+    promptTokens: null,
+    completionTokens: null,
+  });
+  refresh();
+  return { ok: true, message: "確定しました" };
+}
+
+/** 確定を外し、まだ仕分けていない状態に戻す(次の自動処理か「実行する」で、改めて AI が仕分ける)。 */
+export async function clearClassificationLabelAction(messageId: number): Promise<ActionState> {
+  if (!Number.isInteger(messageId)) return { ok: false, message: "不正な指定です" };
+  const db = getDb();
+  const owned = db
+    .prepare("SELECT 1 FROM classify_labels l JOIN messages m ON m.id = l.message_id WHERE l.message_id = ? AND m.account = ?")
+    .get(messageId, getActiveAccount().id);
+  if (!owned) return { ok: false, message: "確定した仕分けが見つかりません。" };
+  db.prepare("DELETE FROM classify_labels WHERE message_id = ?").run(messageId);
+  db.prepare("DELETE FROM ai_results WHERE message_id = ? AND kind = 'classify'").run(messageId);
+  refresh();
+  return { ok: true, message: "確定を外しました" };
 }
 
 export async function clearLogAction(): Promise<void> {

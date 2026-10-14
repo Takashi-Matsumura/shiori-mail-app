@@ -10,6 +10,7 @@ import { bytes, fullDate } from "@/lib/format";
 import { HEADER_NOTES } from "@/lib/mail/header-notes";
 import { MAILBOXES } from "@/lib/mail/imap";
 import { parseHeaderLines, parseRaw, splitRaw } from "@/lib/mail/parse";
+import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { getAiResults, getMessage, getThread, type AiResultRow } from "@/lib/queries";
 
 /** 生データ欄に出す上限。添付が大きいメールで画面が固まらないようにする。 */
@@ -97,6 +98,7 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
         summary={ai.summary ? { text: ai.summary.result, meta: meta(ai.summary)! } : null}
         threadSummary={ai.thread_summary ? { text: ai.thread_summary.result, meta: meta(ai.thread_summary)! } : null}
         classification={ai.classify ? { value: parseResult<Classification>(ai.classify), meta: meta(ai.classify)! } : null}
+        classificationLabeled={ai.classify?.model === USER_LABEL_MODEL}
         extraction={ai.extract ? { items: parseResult<{ items: ExtractedItem[] }>(ai.extract)?.items ?? [], meta: meta(ai.extract)! } : null}
       />
 

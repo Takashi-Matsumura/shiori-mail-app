@@ -23,7 +23,7 @@ type Props = {
   };
   passwordSource: "keychain" | "env" | "none";
   keychainAvailable: boolean;
-  ai: { baseUrl: string; embedBaseUrl: string; chatModel: string; embedModel: string; thinking: boolean };
+  ai: { baseUrl: string; embedBaseUrl: string; chatModel: string; embedModel: string; thinking: boolean; classifyKnn: boolean };
   defaultBaseUrl: string;
   chatModels: string[];
   embedModels: string[];
@@ -230,6 +230,15 @@ export function SettingsForm({
             回答の前にモデルに考えさせる(思考モード)
             <span className="block text-xs text-muted">
               対応モデルのみ。判断は丁寧になりますが、1 通あたりの待ち時間が数倍〜数十倍に延びます。速さと質の違いを比べる実験用です。
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2">
+          <input type="checkbox" name="aiClassifyKnn" value="on" defaultChecked={ai.classifyKnn} className="mt-1" />
+          <span>
+            仕分けは、まず似たメールの仕分けから推定する(近傍法)
+            <span className="block text-xs text-muted">
+              検索用の埋め込みを使い、1 通あたり数ミリ秒で仕分けます。似たメールの仕分けが割れているときや、見たことのない種類のメールだけ、会話用モデルに聞きます。手本になるのは会話用モデルの判定と、あなたが確定した仕分けです(仕分け済みが 20 通に満たないうちは、すべて会話用モデルに聞きます)。
             </span>
           </span>
         </label>

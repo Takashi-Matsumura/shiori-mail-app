@@ -39,7 +39,8 @@ export async function POST(request: Request) {
       if (request.signal.aborted) return;
       const m = await getMessageById(account.id, id);
       if (m) {
-        const r = await RUNNERS[kind](m);
+        // 1 通だけのやり直しは、利用者が「AI に聞き直したい」と押したものなので、近傍法を飛ばして会話用モデルに聞く
+        const r = kind === "classify" && body?.id !== undefined ? await classifyMessage(m, { preferLlm: true }) : await RUNNERS[kind](m);
         send({ t: "progress", done: ++done, total: ids.length, label: m.subject, note: `${r.summary}(${(r.ms / 1000).toFixed(1)} 秒)` });
       }
     }

@@ -2,6 +2,7 @@ import "server-only";
 import { chatJson, embed, resolveEmbedModel, AiError, type Usage } from "@/lib/ai/client";
 import { getAiConfig } from "@/lib/ai/config";
 import { classifyWithJev, JevError } from "@/lib/ai/jev";
+import { EXAMPLES_SQL, KNN_K, KNN_MODEL_PREFIX, knnClassify, toExamples, toVector, type ExampleRow } from "@/lib/ai/knn";
 import {
   classifyPrompt,
   classifySchema,
@@ -34,10 +35,52 @@ async function classifyMessageWithJev(m: MessageRow): Promise<{ ms: number; summ
   return { ms: r.ms, summary: `${r.value.category} / 優先度 ${r.value.priority}` };
 }
 
-export async function classifyMessage(m: MessageRow): Promise<{ ms: number; summary: string }> {
+/** あなたが確定した仕分けがあるか。あれば AI の処理で上書きしない。 */
+export function hasUserLabel(messageId: number): boolean {
+  return !!getDb().prepare("SELECT 1 FROM classify_labels WHERE message_id = ?").get(messageId);
+}
+
+/**
+ * 似たメールの仕分けから推定する。埋め込みがまだ無ければ作る。
+ * 推定できない・自信が足りないときは null を返し、呼び出し側が会話用モデルに回す。
+ */
+async function classifyMessageWithKnn(m: MessageRow): Promise<{ ms: number; summary: string } | null> {
+  const started = Date.now();
+  const db = getDb();
+  const read = () => db.prepare("SELECT model, vector FROM embeddings WHERE message_id = ?").get(m.id) as { model: string; vector: Uint8Array } | undefined;
+  let row = read();
+  if (!row) {
+    // 埋め込みサーバが落ちていても仕分けは止めず、会話用モデルに任せる
+    const ok = await embedMessage(m).then(() => true, () => false);
+    if (!ok) return null;
+    row = read();
+    if (!row) return null;
+  }
+  const examples = toExamples(db.prepare(EXAMPLES_SQL).all(m.account, row.model) as ExampleRow[]).filter((e) => e.messageId !== m.id);
+  const r = knnClassify(toVector(row.vector), examples);
+  if (!r?.confident) return null;
+  const percent = (n: number) => `${Math.round(n * 100)}%`;
+  const value = {
+    category: r.category.label,
+    priority: r.priority.label,
+    reason: `よく似たメール ${r.neighbors} 通の仕分けから推定(確信度 カテゴリ ${percent(r.category.confidence)}・優先度 ${percent(r.priority.confidence)})`,
+  };
+  if (!isClassification(value)) return null;
+  const ms = Date.now() - started;
+  saveAiResult(m.id, "classify", `${KNN_MODEL_PREFIX} k=${KNN_K} / ${row.model}`, JSON.stringify(value), ms, { promptTokens: null, completionTokens: null });
+  return { ms, summary: `${value.category} / 優先度 ${value.priority}(近傍法)` };
+}
+
+/** preferLlm: 近傍法を飛ばして会話用モデルに聞く(画面の「やり直す」) */
+export async function classifyMessage(m: MessageRow, options: { preferLlm?: boolean } = {}): Promise<{ ms: number; summary: string }> {
+  if (hasUserLabel(m.id)) return { ms: 0, summary: "あなたが確定済み" };
   const cfg = getAiConfig();
   // 選択中のアカウントだけでなく、メールそのものがテストサーバのものかも確かめる(ID 指定のやり直しなど)
   if (cfg.classifier === "jev" && m.account === "local") return classifyMessageWithJev(m);
+  if (cfg.classifyKnn && !options.preferLlm) {
+    const knn = await classifyMessageWithKnn(m);
+    if (knn) return knn;
+  }
   const r = await chatJson(cfg, classifyPrompt(m), "classification", classifySchema);
   if (!isClassification(r.value)) throw new AiError("分類結果が想定した形ではありませんでした。");
   saveAiResult(m.id, "classify", r.model, JSON.stringify(r.value), r.ms, r.usage);

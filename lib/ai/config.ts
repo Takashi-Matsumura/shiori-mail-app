@@ -12,6 +12,8 @@ export type AiConfig = {
   embedModel: string;
   /** 回答の前にモデルに考えさせるか。丁寧になるが、待ち時間が何倍にも延びる */
   thinking: boolean;
+  /** 仕分けで、まず似たメールの仕分けから推定する(近傍法)。自信が無いときだけ会話用モデルに聞く */
+  classifyKnn: boolean;
   /** 仕分けを任せる先。"jev" なら TypeSafe の Jev(メールがマシンの外へ出る) */
   classifier: "local" | "jev";
 };
@@ -28,6 +30,7 @@ export function getAiConfig(): AiConfig {
     chatModel: getSetting("ai_chat_model") || process.env.AI_CHAT_MODEL || "",
     embedModel: getSetting("ai_embed_model") || process.env.AI_EMBED_MODEL || "",
     thinking: getSetting("ai_thinking") === "on",
+    classifyKnn: getSetting("ai_classify_knn") !== "off",
     // キーと同じく環境変数でだけ切り替える。画面の操作だけでメールが外へ出るようにはしない。
     // 実アカウントのメールは、設定にかかわらず外部の AI へは送らない
     classifier: process.env.AI_CLASSIFIER === "jev" && getActiveAccount().isLocal ? "jev" : "local",

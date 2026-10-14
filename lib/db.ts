@@ -59,6 +59,17 @@ CREATE TABLE IF NOT EXISTS protocol_log (
   line TEXT NOT NULL
 );
 
+-- あなたが確定した仕分け(正解)。ai_* は確定した時点で AI が出していた判定で、AI の正解率を測るのに使う
+CREATE TABLE IF NOT EXISTS classify_labels (
+  message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  priority TEXT NOT NULL,
+  ai_model TEXT,
+  ai_category TEXT,
+  ai_priority TEXT,
+  created INTEGER NOT NULL
+);
+
 -- 読み取り専用モードで付けた既読・未読。サーバへは送らず、同期でもこちらを優先する
 CREATE TABLE IF NOT EXISTS local_seen (
   message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
