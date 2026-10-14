@@ -69,6 +69,30 @@ CREATE TABLE IF NOT EXISTS local_seen (
   seen INTEGER NOT NULL
 );
 
+-- アプリを開くためのパスキー。公開鍵だけを持ち、秘密鍵は Mac(iCloud キーチェーン)から出ない
+CREATE TABLE IF NOT EXISTS passkeys (
+  id TEXT PRIMARY KEY,
+  public_key BLOB NOT NULL,
+  counter INTEGER NOT NULL DEFAULT 0,
+  transports TEXT,
+  created INTEGER NOT NULL,
+  last_used INTEGER
+);
+
+-- ログイン中のセッション。Cookie の値そのものではなく、その SHA-256 を持つ
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY,
+  created INTEGER NOT NULL,
+  last_seen INTEGER NOT NULL
+);
+
+-- パスキーの登録・認証で発行した、使い捨てのチャレンジ
+CREATE TABLE IF NOT EXISTS auth_challenges (
+  challenge TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  expires INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
