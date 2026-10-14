@@ -1,7 +1,7 @@
-import Image from "next/image";
 import { io } from "next/cache";
 import { Suspense } from "react";
 import { LoginForm } from "@/components/login-form";
+import { ShioriLogo } from "@/components/shiori-logo";
 import { hasPasskeys } from "@/lib/auth/passkey";
 
 export default function LoginPage({ searchParams }: PageProps<"/login">) {
@@ -9,7 +9,7 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
     <main className="flex flex-1 items-center justify-center p-6">
       <div className="flex w-full max-w-sm flex-col items-center gap-5 rounded-xl border border-line bg-panel p-8">
         <p className="flex items-center gap-2 text-lg font-semibold">
-          <Image src="/icon.svg" alt="" width={28} height={28} unoptimized priority />
+          <ShioriLogo size={28} />
           Shiori Mail
         </p>
         <Suspense fallback={<p className="text-muted">読み込み中…</p>}>

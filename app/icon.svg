@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Shiori Mail">
   <title>Shiori Mail</title>
   <style>
-    .line { fill: none; stroke: #0f5f6e; stroke-linecap: round; stroke-linejoin: round; }
-    /* 暗い画面(ブラウザのタブなど)でも見えるよう、アプリのダークモードと同じ明るいティールにする */
-    @media (prefers-color-scheme: dark) { .line { stroke: #6fc3d1; } }
+    .line { fill: none; stroke: #4f6e58; stroke-linecap: round; stroke-linejoin: round; }
+    /* タブのアイコンはテーマカラーを選べないので、既定の配色(若竹と蔵書印)で描く。暗い画面ではダークモードの明るい色にする */
+    @media (prefers-color-scheme: dark) { .line { stroke: #9cc2a5; } }
   </style>
 
   <!-- 燕尾のリボン栞 -->
