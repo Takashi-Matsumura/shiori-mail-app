@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { syncAction } from "@/app/actions";
 import type { StreamEvent } from "@/lib/ai/stream";
+import { useNotices } from "@/lib/client/notices";
 import { useStoredFlag } from "@/lib/client/use-stored-flag";
 
 const INTERVAL_MS = 5 * 60_000;
@@ -15,8 +16,6 @@ const STEPS = [
   { kind: "extract", label: "予定の抜き出し" },
   { kind: "embed", label: "検索用の索引" },
 ] as const;
-
-type Status = { text: string; error: boolean };
 
 /** 未処理のメールを 1 種類ぶん AI にかける。失敗したらその文言を返す。 */
 async function runBatch(kind: string, signal: AbortSignal, onProgress: (done: number, total: number) => void): Promise<string | null> {
@@ -55,12 +54,15 @@ async function runBatch(kind: string, signal: AbortSignal, onProgress: (done: nu
 export function AutoRunner() {
   const router = useRouter();
   const [enabled, setEnabled] = useStoredFlag("auto-run", true);
-  const [status, setStatus] = useState<Status | null>(null);
+  const { notify, dismiss } = useNotices();
 
   useEffect(() => {
     if (!enabled) return;
     const ac = new AbortController();
     let busy = false;
+    // 進み具合と結果は、画面上端のヘッダーに出す
+    const setStatus = ({ text, error }: { text: string; error: boolean }) =>
+      notify({ source: "auto", kind: error ? "error" : "progress", text: `自動処理: ${text}` });
 
     const cycle = async () => {
       setStatus({ text: "同期中…", error: false });
@@ -80,7 +82,8 @@ export function AutoRunner() {
         }
       }
       const time = new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
-      setStatus(failure ? { text: failure, error: true } : { text: `${time} に確認済み`, error: false });
+      if (failure) setStatus({ text: failure, error: true });
+      else notify({ source: "auto", kind: "info", text: `自動処理: ${time} に確認済み` });
     };
 
     const tick = async () => {
@@ -102,20 +105,17 @@ export function AutoRunner() {
       ac.abort();
       clearTimeout(first);
       clearInterval(timer);
+      // 止めたとき(アカウントの切り替えを含む)は、前の状態を残さない
+      dismiss("auto");
     };
-  }, [enabled, router]);
+  }, [enabled, router, notify, dismiss]);
 
   return (
-    <div className="flex flex-col gap-1 text-xs">
+    <div className="text-xs">
       <label className="flex items-center gap-1.5 whitespace-nowrap text-muted" title="画面を開いている間、5 分ごとにサーバと同期し、新着を AI で処理します">
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         自動で同期・AI 処理
       </label>
-      {enabled && status ? (
-        <p role="status" className={`truncate ${status.error ? "text-red-600" : "text-muted"}`} title={status.text}>
-          {status.text}
-        </p>
-      ) : null}
     </div>
   );
 }
