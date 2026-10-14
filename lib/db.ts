@@ -1,5 +1,5 @@
 import "server-only";
-import { mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -72,7 +72,11 @@ export function getDb(): DatabaseSync {
   if (!globalForDb.__mailerDb) {
     const dir = path.join(process.cwd(), "data");
     mkdirSync(dir, { recursive: true });
-    const db = new DatabaseSync(path.join(dir, "mailer.db"));
+    const file = path.join(dir, "mailer.db");
+    const db = new DatabaseSync(file);
+    // メールの本文が入るので、このマシンの他の利用者からは読めないようにする(既存のファイルにも掛け直す)
+    chmodSync(dir, 0o700);
+    chmodSync(file, 0o600);
     db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     db.exec(SCHEMA);
     globalForDb.__mailerDb = db;

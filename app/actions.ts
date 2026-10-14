@@ -8,10 +8,12 @@ import { sendMail, type SendResult } from "@/lib/mail/smtp";
 
 export type ActionState = { ok: boolean; message: string } | null;
 
-function describeError(e: unknown, target: string): string {
+function describeError(e: unknown, target: string, isLocal: boolean): string {
   const code = (e as { code?: string })?.code;
   if (code === "ECONNREFUSED" || code === "NoConnection" || code === "ESOCKET") {
-    return `${target}に接続できません。テストサーバなら「npm run mail:up」で起動してください。`;
+    return isLocal
+      ? `${target}に接続できません。「npm run mail:up」でテストサーバを起動してください。`
+      : `${target}に接続できません。.env.local のホスト名とポート、ネットワークの状態を確認してください。`;
   }
   if (code === "EAUTH" || (e as { authenticationFailed?: boolean })?.authenticationFailed) {
     return `${target}の認証に失敗しました。ユーザ名とパスワードを確認してください。`;
@@ -27,18 +29,19 @@ export async function syncAction(): Promise<ActionState> {
     refresh();
     return { ok: true, message: count > 0 ? `${count} 通を取り込みました` : "新着はありません" };
   } catch (e) {
-    return { ok: false, message: describeError(e, "IMAP サーバ") };
+    return { ok: false, message: describeError(e, "IMAP サーバ", account.isLocal) };
   }
 }
 
 export async function setSeenAction(mailbox: MailboxSlug, uid: number, seen: boolean): Promise<ActionState> {
   if ((mailbox !== "inbox" && mailbox !== "sent") || !Number.isInteger(uid)) return { ok: false, message: "不正な指定です" };
+  const account = getActiveAccount();
   try {
-    await setSeenFlag(getActiveAccount(), mailbox, uid, seen);
+    await setSeenFlag(account, mailbox, uid, seen);
     refresh();
     return { ok: true, message: seen ? "既読にしました" : "未読に戻しました" };
   } catch (e) {
-    return { ok: false, message: describeError(e, "IMAP サーバ") };
+    return { ok: false, message: describeError(e, "IMAP サーバ", account.isLocal) };
   }
 }
 
@@ -86,7 +89,7 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
       references,
     });
   } catch (e) {
-    return { ok: false, message: describeError(e, "SMTP サーバ") };
+    return { ok: false, message: describeError(e, "SMTP サーバ", account.isLocal) };
   }
   // 自分宛のメールや送信済みの控えをすぐ一覧に出す
   await syncAccount(account).catch(() => {});

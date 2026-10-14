@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AutoRunner } from "@/components/auto-runner";
 import { InboxIcon, LogIcon, PlusIcon, SearchIcon, SentIcon, SettingsIcon, TasksIcon } from "@/components/icons";
 import { NavLink } from "@/components/nav-link";
 import { SyncButton } from "@/components/sync-button";
@@ -24,6 +25,7 @@ export async function Sidebar() {
         新規作成
       </Link>
       <SyncButton />
+      <AutoRunner />
       <nav className="flex flex-col gap-0.5">
         <NavLink href="/mail/inbox" icon={<InboxIcon />} badge={counts.unread || undefined}>
           受信トレイ
