@@ -27,7 +27,8 @@ export async function Sidebar() {
         新規作成
       </Link>
       <SyncButton />
-      <AutoRunner />
+      {/* アカウントを切り替えたら作り直し、前のアカウントでの結果(エラーなど)を残さない */}
+      <AutoRunner key={account.id} />
       <nav className="flex flex-col gap-0.5">
         <NavLink href="/mail/inbox" icon={<InboxIcon />} badge={counts.unread || undefined}>
           受信トレイ
