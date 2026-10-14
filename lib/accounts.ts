@@ -1,5 +1,6 @@
 import "server-only";
 import { getSetting } from "@/lib/db";
+import { readPassword } from "@/lib/keychain";
 
 export type AccountId = "local" | "real";
 
@@ -18,6 +19,8 @@ export type Account = {
   sentMailbox?: string;
   /** 送信後に控えを送信済みフォルダへ IMAP APPEND するか(Gmail はサーバが自動保存するので false) */
   appendSent: boolean;
+  /** サーバのメールボックスに一切書き込まない(既読フラグ・送信済みへの控え・送信を止める) */
+  readOnly: boolean;
 };
 
 const LOCAL: Account = {
@@ -32,31 +35,83 @@ const LOCAL: Account = {
   smtp: { host: "127.0.0.1", port: 3025, secure: false },
   sentMailbox: "Sent",
   appendSent: true,
+  readOnly: false,
 };
 
-/** .env.local の REAL_* から実アカウントを組み立てる。必須項目が欠けていれば null。 */
-export function getRealAccount(): Account | null {
+/** 実アカウントの、パスワード以外の設定。画面で入力したもの(DB)を優先し、無ければ .env.local の REAL_* を使う。 */
+export type RealAccountFields = {
+  email: string;
+  name: string;
+  /** ログイン名。空ならアドレスを使う */
+  user: string;
+  imapHost: string;
+  imapPort: number;
+  smtpHost: string;
+  smtpPort: number;
+  sentMailbox: string;
+  appendSent: boolean;
+  readOnly: boolean;
+};
+
+export const REAL_SETTING_KEYS = {
+  email: "real_email",
+  name: "real_name",
+  user: "real_user",
+  imapHost: "real_imap_host",
+  imapPort: "real_imap_port",
+  smtpHost: "real_smtp_host",
+  smtpPort: "real_smtp_port",
+  sentMailbox: "real_sent_mailbox",
+  appendSent: "real_append_sent",
+  readOnly: "real_read_only",
+} as const;
+
+export function getRealAccountFields(): RealAccountFields {
   const env = process.env;
-  const email = env.REAL_MAIL_ADDRESS;
-  const pass = env.REAL_MAIL_PASSWORD;
-  const imapHost = env.REAL_IMAP_HOST;
-  const smtpHost = env.REAL_SMTP_HOST;
-  if (!email || !pass || !imapHost || !smtpHost) return null;
-  const imapPort = Number(env.REAL_IMAP_PORT ?? 993);
-  const smtpPort = Number(env.REAL_SMTP_PORT ?? 465);
+  const pick = (key: string, envValue: string | undefined) => getSetting(key) ?? envValue ?? "";
+  return {
+    email: pick(REAL_SETTING_KEYS.email, env.REAL_MAIL_ADDRESS),
+    name: pick(REAL_SETTING_KEYS.name, env.REAL_MAIL_NAME),
+    user: pick(REAL_SETTING_KEYS.user, env.REAL_MAIL_USER),
+    imapHost: pick(REAL_SETTING_KEYS.imapHost, env.REAL_IMAP_HOST),
+    imapPort: Number(pick(REAL_SETTING_KEYS.imapPort, env.REAL_IMAP_PORT) || 993),
+    smtpHost: pick(REAL_SETTING_KEYS.smtpHost, env.REAL_SMTP_HOST),
+    smtpPort: Number(pick(REAL_SETTING_KEYS.smtpPort, env.REAL_SMTP_PORT) || 465),
+    sentMailbox: pick(REAL_SETTING_KEYS.sentMailbox, env.REAL_SENT_MAILBOX),
+    appendSent: pick(REAL_SETTING_KEYS.appendSent, env.REAL_APPEND_SENT) !== "false",
+    // 検証のあいだ実メールボックスを変えないよう、明示的に外すまでは読み取り専用にする
+    readOnly: pick(REAL_SETTING_KEYS.readOnly, env.REAL_READ_ONLY) !== "false",
+  };
+}
+
+/** パスワードはキーチェーンを優先し、無ければ .env.local の REAL_MAIL_PASSWORD を使う。 */
+export function getRealPassword(): string | null {
+  return readPassword() ?? (process.env.REAL_MAIL_PASSWORD || null);
+}
+
+/** 実アカウントを組み立てる。必須項目が欠けていれば null。 */
+export function getRealAccount(): Account | null {
+  const pass = getRealPassword();
+  return pass ? buildRealAccount(getRealAccountFields(), pass) : null;
+}
+
+/** 保存前の入力値からも組み立てられるよう、設定の読み出しとは分けておく(接続の確認で使う)。 */
+export function buildRealAccount(f: RealAccountFields, pass: string): Account | null {
+  if (!f.email || !pass || !f.imapHost || !f.smtpHost) return null;
   return {
     id: "real",
-    label: `実アカウント (${email})`,
+    label: `実アカウント (${f.email})`,
     isLocal: false,
-    name: env.REAL_MAIL_NAME ?? "",
-    email,
-    user: env.REAL_MAIL_USER ?? email,
+    name: f.name,
+    email: f.email,
+    user: f.user || f.email,
     pass,
-    imap: { host: imapHost, port: imapPort, secure: imapPort === 993 },
+    imap: { host: f.imapHost, port: f.imapPort, secure: f.imapPort === 993 },
     // 465 は最初から TLS、587 は STARTTLS で途中から暗号化する
-    smtp: { host: smtpHost, port: smtpPort, secure: smtpPort === 465 },
-    sentMailbox: env.REAL_SENT_MAILBOX || undefined,
-    appendSent: env.REAL_APPEND_SENT !== "false",
+    smtp: { host: f.smtpHost, port: f.smtpPort, secure: f.smtpPort === 465 },
+    sentMailbox: f.sentMailbox || undefined,
+    appendSent: f.appendSent,
+    readOnly: f.readOnly,
   };
 }
 

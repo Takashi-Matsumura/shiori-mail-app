@@ -10,7 +10,7 @@ import { useAiStream } from "@/lib/client/use-ai-stream";
 type Props = {
   defaults: { to: string; cc: string; subject: string; body: string; inReplyTo: string; references: string };
   replyTo: { id: number; subject: string; from: string } | null;
-  account: { email: string; name: string; isLocal: boolean };
+  account: { email: string; name: string; isLocal: boolean; readOnly: boolean };
 };
 
 const inputClass = "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 focus:border-accent focus:outline-none";
@@ -137,7 +137,11 @@ export function ComposeForm({ defaults, replyTo, account }: Props) {
       <label htmlFor="body" className="sr-only">本文</label>
       <textarea id="body" name="body" value={body} onChange={(e) => setBody(e.target.value)} rows={16} className={`${inputClass} font-mono leading-relaxed`} />
 
-      {!account.isLocal ? (
+      {account.readOnly ? (
+        <p className="rounded-lg border border-line bg-background p-3 text-sm">
+          読み取り専用モードなので送信できません。下書きと AI アシストは使えます。送るときは設定画面でモードを外してください。
+        </p>
+      ) : !account.isLocal ? (
         <label className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100">
           <input type="checkbox" name="confirmReal" value="yes" className="mt-0.5" />
           <span>
@@ -151,7 +155,7 @@ export function ComposeForm({ defaults, replyTo, account }: Props) {
 
       {state && !state.ok ? <p role="alert" className="text-red-600">{state.message}</p> : null}
       <div>
-        <button disabled={pending || ai.state.running} className="rounded-md bg-accent px-4 py-2 font-medium text-panel hover:opacity-90 disabled:opacity-60">
+        <button disabled={pending || ai.state.running || account.readOnly} className="rounded-md bg-accent px-4 py-2 font-medium text-panel hover:opacity-90 disabled:opacity-60">
           {pending ? "送信中…" : "送信"}
         </button>
       </div>

@@ -12,7 +12,9 @@ export async function Sidebar() {
   return (
     <div className="flex flex-col gap-4 p-3 pt-0">
       <div>
-        <p className="text-xs text-muted">{account.isLocal ? "テストサーバ" : "実アカウント"}</p>
+        <p className="text-xs text-muted">
+          {account.isLocal ? "テストサーバ" : account.readOnly ? "実アカウント・読み取り専用" : "実アカウント"}
+        </p>
         <p className="truncate font-medium" title={account.email}>
           {account.email}
         </p>

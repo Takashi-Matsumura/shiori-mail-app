@@ -39,7 +39,34 @@ function protocolLogger(accountId: string, conn: string) {
   return { level: noop, trace: noop, debug: write, info: write, warn: write, error: write, fatal: write };
 }
 
+function createTransport(account: Account, timeouts: { connectionTimeout?: number; greetingTimeout?: number } = {}) {
+  return nodemailer.createTransport({
+    ...timeouts,
+    host: account.smtp.host,
+    port: account.smtp.port,
+    secure: account.smtp.secure,
+    // 実アカウントでは、STARTTLS を剥がされても平文のままパスワードを送らない
+    requireTLS: !account.isLocal && !account.smtp.secure,
+    // テストサーバは認証なしで受け付ける
+    auth: account.isLocal ? undefined : { user: account.user, pass: account.pass },
+    logger: protocolLogger(account.id, `smtp-${++connSeq}`),
+    debug: true,
+  });
+}
+
+/** 認証まで通るかだけを確かめる(メールは送らない)。 */
+export async function verifySmtp(account: Account): Promise<void> {
+  const transport = createTransport(account, { connectionTimeout: 15_000, greetingTimeout: 15_000 });
+  try {
+    await transport.verify();
+  } finally {
+    transport.close();
+  }
+}
+
 export async function sendMail(account: Account, mail: OutgoingMail): Promise<SendResult> {
+  // 画面とサーバアクションでも止めているが、ここでも二重に守る
+  if (account.readOnly) throw new Error("読み取り専用モードでは送信しません");
   // 先に RFC 5322 形式へ組み立てる。送信と送信済みへの控えで同じバイト列を使うため。
   const node = new MailComposer({
     from: account.name ? { name: account.name, address: account.email } : account.email,
@@ -54,15 +81,7 @@ export async function sendMail(account: Account, mail: OutgoingMail): Promise<Se
   const messageId = node.messageId();
   const raw = await node.build();
 
-  const transport = nodemailer.createTransport({
-    host: account.smtp.host,
-    port: account.smtp.port,
-    secure: account.smtp.secure,
-    // テストサーバは認証なしで受け付ける
-    auth: account.isLocal ? undefined : { user: account.user, pass: account.pass },
-    logger: protocolLogger(account.id, `smtp-${++connSeq}`),
-    debug: true,
-  });
+  const transport = createTransport(account);
   let info;
   try {
     info = await transport.sendMail({ envelope, raw });

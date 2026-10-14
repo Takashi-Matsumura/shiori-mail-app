@@ -40,7 +40,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       key={replyId ?? "new"}
       defaults={defaults}
       replyTo={original ? { id: original.id, subject: original.subject, from: original.from_name || original.from_addr } : null}
-      account={{ email: account.email, name: account.name, isLocal: account.isLocal }}
+      account={{ email: account.email, name: account.name, isLocal: account.isLocal, readOnly: account.readOnly }}
     />
   );
 }

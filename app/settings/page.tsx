@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { SettingsForm } from "@/components/settings-form";
-import { getActiveAccount, getLocalAccount, getRealAccount } from "@/lib/accounts";
+import { getActiveAccount, getLocalAccount, getRealAccount, getRealAccountFields } from "@/lib/accounts";
+import { keychainAvailable, readPassword } from "@/lib/keychain";
 import { AiError, listModels } from "@/lib/ai/client";
 import { DEFAULT_AI_BASE_URL, getAiConfig } from "@/lib/ai/config";
 import { io } from "next/cache";
@@ -23,6 +24,8 @@ async function Settings() {
   const active = getActiveAccount();
   const local = getLocalAccount();
   const real = getRealAccount();
+  // パスワードそのものは画面へ渡さず、どこにあるかだけを伝える
+  const passwordSource = readPassword() ? "keychain" : process.env.REAL_MAIL_PASSWORD ? "env" : "none";
   const cfg = getAiConfig();
   const separateEmbed = cfg.embedBaseUrl !== cfg.baseUrl;
   const load = (url: string) =>
@@ -39,6 +42,9 @@ async function Settings() {
       activeAccount={active.id}
       local={{ email: local.email, servers: describe(local) }}
       real={real ? { email: real.email, servers: describe(real) } : null}
+      realFields={getRealAccountFields()}
+      passwordSource={passwordSource}
+      keychainAvailable={keychainAvailable}
       ai={{
         baseUrl: cfg.baseUrl,
         embedBaseUrl: separateEmbed ? cfg.embedBaseUrl : "",

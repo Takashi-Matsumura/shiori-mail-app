@@ -59,6 +59,12 @@ CREATE TABLE IF NOT EXISTS protocol_log (
   line TEXT NOT NULL
 );
 
+-- 読み取り専用モードで付けた既読・未読。サーバへは送らず、同期でもこちらを優先する
+CREATE TABLE IF NOT EXISTS local_seen (
+  message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+  seen INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL

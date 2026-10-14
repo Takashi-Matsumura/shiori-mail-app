@@ -26,11 +26,18 @@ function protocolLogger(accountId: string) {
   return { trace: () => {}, debug: write, info: write, warn: write, error: write };
 }
 
-async function withImap<T>(account: Account, fn: (client: ImapFlow) => Promise<T>): Promise<T> {
+async function withImap<T>(
+  account: Account,
+  fn: (client: ImapFlow) => Promise<T>,
+  options: { connectionTimeout?: number; greetingTimeout?: number } = {},
+): Promise<T> {
   const client = new ImapFlow({
+    ...options,
     host: account.imap.host,
     port: account.imap.port,
     secure: account.imap.secure,
+    // 実アカウントでは、STARTTLS を剥がされても平文のままパスワードを送らない
+    doSTARTTLS: account.isLocal || account.imap.secure ? undefined : true,
     auth: { user: account.user, pass: account.pass },
     logger: protocolLogger(account.id),
   });
@@ -42,6 +49,11 @@ async function withImap<T>(account: Account, fn: (client: ImapFlow) => Promise<T
   } finally {
     await client.logout().catch(() => {});
   }
+}
+
+/** ログインまで通るかだけを確かめる。設定画面で、待たされすぎないよう短めに打ち切る。 */
+export async function verifyImap(account: Account): Promise<void> {
+  await withImap(account, async () => {}, { connectionTimeout: 15_000, greetingTimeout: 15_000 });
 }
 
 async function resolvePath(client: ImapFlow, account: Account, slug: MailboxSlug): Promise<string> {
@@ -62,7 +74,8 @@ async function resolvePath(client: ImapFlow, account: Account, slug: MailboxSlug
 async function syncMailbox(client: ImapFlow, account: Account, slug: MailboxSlug): Promise<number> {
   const db = getDb();
   const path = await resolvePath(client, account, slug);
-  const lock = await client.getMailboxLock(path);
+  // 読み取り専用なら EXAMINE で開く(SELECT と違い、\Recent などサーバ側の状態も変えない)
+  const lock = await client.getMailboxLock(path, { readOnly: account.readOnly });
   try {
     const mailbox = client.mailbox;
     if (!mailbox) return 0;
@@ -91,7 +104,10 @@ async function syncMailbox(client: ImapFlow, account: Account, slug: MailboxSlug
     // 既読フラグは他のメーラーでも変わるので、手元にある分を取り直す
     const kept = [...localUids].filter((uid) => serverSet.has(uid));
     if (kept.length > 0) {
-      const setSeen = db.prepare("UPDATE messages SET seen = ? WHERE account = ? AND mailbox = ? AND uid = ?");
+      // 読み取り専用モードでアプリの中だけ付けた既読・未読は、サーバの状態で上書きしない
+      const setSeen = db.prepare(
+        "UPDATE messages SET seen = ? WHERE account = ? AND mailbox = ? AND uid = ? AND id NOT IN (SELECT message_id FROM local_seen)",
+      );
       const flagRows: { uid: number; seen: number }[] = [];
       for await (const m of client.fetch(kept, { uid: true, flags: true }, { uid: true })) {
         flagRows.push({ uid: m.uid, seen: m.flags?.has("\\Seen") ? 1 : 0 });
@@ -164,6 +180,20 @@ export async function syncAccount(account: Account): Promise<number> {
 
 /** \Seen フラグを付け外しする。既読・未読はサーバ上のフラグにすぎない。 */
 export async function setSeenFlag(account: Account, slug: MailboxSlug, uid: number, seen: boolean): Promise<void> {
+  if (account.readOnly) {
+    // サーバへは送らず、アプリの中だけで覚えておく
+    const db = getDb();
+    const row = db.prepare("SELECT id FROM messages WHERE account = ? AND mailbox = ? AND uid = ?").get(account.id, slug, uid) as
+      | { id: number }
+      | undefined;
+    if (!row) return;
+    db.prepare("INSERT INTO local_seen (message_id, seen) VALUES (?, ?) ON CONFLICT (message_id) DO UPDATE SET seen = excluded.seen").run(
+      row.id,
+      seen ? 1 : 0,
+    );
+    db.prepare("UPDATE messages SET seen = ? WHERE id = ?").run(seen ? 1 : 0, row.id);
+    return;
+  }
   await withImap(account, async (client) => {
     const lock = await client.getMailboxLock(await resolvePath(client, account, slug));
     try {
@@ -180,6 +210,7 @@ export async function setSeenFlag(account: Account, slug: MailboxSlug, uid: numb
 
 /** 送信したメールの控えを送信済みフォルダへ置く。SMTP は届けるだけで、控えの保存は IMAP の仕事。 */
 export async function appendToSent(account: Account, raw: Buffer): Promise<void> {
+  if (account.readOnly) throw new Error("読み取り専用モードではメールボックスへ書き込みません");
   await withImap(account, async (client) => {
     const path = await resolvePath(client, account, "sent");
     await client.append(path, raw, ["\\Seen"]);

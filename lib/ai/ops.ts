@@ -36,7 +36,8 @@ async function classifyMessageWithJev(m: MessageRow): Promise<{ ms: number; summ
 
 export async function classifyMessage(m: MessageRow): Promise<{ ms: number; summary: string }> {
   const cfg = getAiConfig();
-  if (cfg.classifier === "jev") return classifyMessageWithJev(m);
+  // 選択中のアカウントだけでなく、メールそのものがテストサーバのものかも確かめる(ID 指定のやり直しなど)
+  if (cfg.classifier === "jev" && m.account === "local") return classifyMessageWithJev(m);
   const r = await chatJson(cfg, classifyPrompt(m), "classification", classifySchema);
   if (!isClassification(r.value)) throw new AiError("分類結果が想定した形ではありませんでした。");
   saveAiResult(m.id, "classify", r.model, JSON.stringify(r.value), r.ms, r.usage);

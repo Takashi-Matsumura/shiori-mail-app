@@ -1,4 +1,5 @@
 import "server-only";
+import { getActiveAccount } from "@/lib/accounts";
 import { getSetting } from "@/lib/db";
 
 export type AiConfig = {
@@ -27,8 +28,9 @@ export function getAiConfig(): AiConfig {
     chatModel: getSetting("ai_chat_model") || process.env.AI_CHAT_MODEL || "",
     embedModel: getSetting("ai_embed_model") || process.env.AI_EMBED_MODEL || "",
     thinking: getSetting("ai_thinking") === "on",
-    // キーと同じく環境変数でだけ切り替える。画面の操作だけでメールが外へ出るようにはしない
-    classifier: process.env.AI_CLASSIFIER === "jev" ? "jev" : "local",
+    // キーと同じく環境変数でだけ切り替える。画面の操作だけでメールが外へ出るようにはしない。
+    // 実アカウントのメールは、設定にかかわらず外部の AI へは送らない
+    classifier: process.env.AI_CLASSIFIER === "jev" && getActiveAccount().isLocal ? "jev" : "local",
   };
 }
 

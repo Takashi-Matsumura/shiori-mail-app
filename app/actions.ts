@@ -1,10 +1,11 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { getActiveAccount, getRealAccount } from "@/lib/accounts";
+import { REAL_SETTING_KEYS, buildRealAccount, getActiveAccount, getRealAccount, getRealAccountFields, getRealPassword } from "@/lib/accounts";
 import { getDb, setSetting } from "@/lib/db";
-import { setSeenFlag, syncAccount, type MailboxSlug } from "@/lib/mail/imap";
-import { sendMail, type SendResult } from "@/lib/mail/smtp";
+import { deletePassword, isStorablePassword, keychainAvailable, writePassword } from "@/lib/keychain";
+import { setSeenFlag, syncAccount, verifyImap, type MailboxSlug } from "@/lib/mail/imap";
+import { sendMail, verifySmtp, type SendResult } from "@/lib/mail/smtp";
 
 export type ActionState = { ok: boolean; message: string } | null;
 
@@ -13,10 +14,17 @@ function describeError(e: unknown, target: string, isLocal: boolean): string {
   if (code === "ECONNREFUSED" || code === "NoConnection" || code === "ESOCKET") {
     return isLocal
       ? `${target}に接続できません。「npm run mail:up」でテストサーバを起動してください。`
-      : `${target}に接続できません。.env.local のホスト名とポート、ネットワークの状態を確認してください。`;
+      : `${target}に接続できません。設定画面のホスト名とポート、ネットワークの状態を確認してください。`;
   }
   if (code === "EAUTH" || (e as { authenticationFailed?: boolean })?.authenticationFailed) {
     return `${target}の認証に失敗しました。ユーザ名とパスワードを確認してください。`;
+  }
+  if (code === "ENOTFOUND" || code === "EDNS") return `${target}のホスト名が見つかりません。綴りを確認してください。`;
+  if (code === "ETIMEDOUT" || code === "ETIMEOUT" || code === "CONNECT_TIMEOUT" || code === "GREETING_TIMEOUT") {
+    return `${target}から応答がありません。ポート番号(暗号化の方式)とネットワークの状態を確認してください。`;
+  }
+  if (code === "ETLS" || code === "EREQUIRETLS" || (e as { tlsFailed?: boolean })?.tlsFailed) {
+    return `${target}と暗号化した接続を確立できなかったので、パスワードを送らずに止めました。ポート番号を確認してください。`;
   }
   console.error(e);
   return `${target}との通信でエラーが発生しました。通信ログを確認してください。`;
@@ -66,6 +74,9 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
   if (!text.trim()) return { ok: false, message: "本文を入力してください。" };
 
   const account = getActiveAccount();
+  if (account.readOnly) {
+    return { ok: false, message: "読み取り専用モードなので送信しません。送るときは設定画面でモードを外してください。" };
+  }
   // 実アカウントからは本当に相手へ届く。画面の確認チェックをサーバ側でも必須にする。
   if (!account.isLocal && field("confirmReal") !== "yes") {
     return { ok: false, message: "実アカウントから送信するには、確認のチェックを入れてください。" };
@@ -100,9 +111,8 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
 export async function saveSettingsAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const field = (name: string) => String(formData.get(name) ?? "").trim();
   const accountId = field("account");
-  if (accountId === "real" && !getRealAccount()) {
-    return { ok: false, message: "実アカウントは .env.local に設定してから選んでください。" };
-  }
+  const real = parseRealAccountForm(formData);
+  if (typeof real === "string") return { ok: false, message: real };
   const baseUrl = field("aiBaseUrl");
   const embedBaseUrl = field("aiEmbedBaseUrl");
   for (const url of [baseUrl, embedBaseUrl]) {
@@ -115,6 +125,27 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
     } catch {}
     if (!valid) return { ok: false, message: "AI のベース URL は http:// か https:// で始まる URL にしてください。" };
   }
+  if (real.password) {
+    if (!keychainAvailable) return { ok: false, message: "パスワードの保存先(キーチェーン)は macOS でだけ使えます。" };
+    try {
+      writePassword(real.password);
+    } catch {
+      return { ok: false, message: "キーチェーンにパスワードを保存できませんでした。" };
+    }
+  } else if (real.forgetPassword) {
+    deletePassword();
+  }
+  // 読み取り専用を外したら、アプリの中だけで付けていた既読・未読は捨て、次の同期でサーバの状態に戻す
+  if (getRealAccountFields().readOnly && !real.fields.readOnly) {
+    getDb().prepare("DELETE FROM local_seen WHERE message_id IN (SELECT id FROM messages WHERE account = 'real')").run();
+  }
+  for (const [key, settingKey] of Object.entries(REAL_SETTING_KEYS)) {
+    setSetting(settingKey, String(real.fields[key as keyof typeof real.fields]));
+  }
+  if (accountId === "real" && !getRealAccount()) {
+    setSetting("active_account", "local");
+    return { ok: false, message: "実アカウントの設定は保存しましたが、アドレス・パスワード・IMAP / SMTP のホスト名がそろっていないので、テストサーバのままにしました。" };
+  }
   setSetting("active_account", accountId === "real" ? "real" : "local");
   setSetting("ai_base_url", baseUrl);
   setSetting("ai_embed_base_url", embedBaseUrl);
@@ -123,6 +154,70 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
   setSetting("ai_embed_model", field("aiEmbedModel"));
   refresh();
   return { ok: true, message: "保存しました" };
+}
+
+/** 画面の入力値(保存前)で、IMAP と SMTP にログインできるかを確かめる。設定は保存しない。 */
+export async function testRealAccountAction(formData: FormData): Promise<ActionState> {
+  const real = parseRealAccountForm(formData);
+  if (typeof real === "string") return { ok: false, message: real };
+  // 入力が無ければ保存済みのものを使う。接続先を変えていれば parseRealAccountForm が入れ直しを求めている
+  const account = buildRealAccount(real.fields, real.password || (real.forgetPassword ? "" : (getRealPassword() ?? "")));
+  if (!account) return { ok: false, message: "アドレス・パスワード・IMAP / SMTP のホスト名を入れてから確かめてください。" };
+  const check = (target: string, run: Promise<void>) =>
+    run.then(
+      () => ({ ok: true, line: `${target}: ログインできました` }),
+      (e: unknown) => ({ ok: false, line: describeError(e, target, false) }),
+    );
+  const results = await Promise.all([check("IMAP サーバ", verifyImap(account)), check("SMTP サーバ", verifySmtp(account))]);
+  return { ok: results.every((r) => r.ok), message: results.map((r) => r.line).join("\n") };
+}
+
+const HOST_PATTERN = /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$/;
+
+/** 設定画面の実アカウント欄を読み、確かめる。おかしければ利用者向けの文面を返す。 */
+function parseRealAccountForm(formData: FormData) {
+  const field = (name: string) => String(formData.get(name) ?? "").trim();
+  const port = (name: string, fallback: number) => {
+    const v = field(name);
+    return v === "" ? fallback : /^\d{1,5}$/.test(v) && Number(v) >= 1 && Number(v) <= 65535 ? Number(v) : NaN;
+  };
+  const fields = {
+    email: field("realEmail"),
+    name: field("realName"),
+    user: field("realUser"),
+    imapHost: field("realImapHost").toLowerCase(),
+    imapPort: port("realImapPort", 993),
+    smtpHost: field("realSmtpHost").toLowerCase(),
+    smtpPort: port("realSmtpPort", 465),
+    sentMailbox: field("realSentMailbox"),
+    appendSent: field("realAppendSent") === "on",
+    readOnly: field("realReadOnly") === "on",
+  };
+  // パスワードは前後の空白も含めてそのまま使う
+  const password = String(formData.get("realPassword") ?? "");
+  const forgetPassword = field("realForgetPassword") === "on";
+
+  if (fields.email && !/^[^\s@]+@[^\s@]+$/.test(fields.email)) return "メールアドレスの形が正しくありません。";
+  for (const host of [fields.imapHost, fields.smtpHost]) {
+    if (host && (host.length > 253 || !HOST_PATTERN.test(host))) return "ホスト名は imap.example.com のような形で入力してください(http:// などは不要です)。";
+  }
+  if (Number.isNaN(fields.imapPort) || Number.isNaN(fields.smtpPort)) return "ポートは 1〜65535 の数字で入力してください。";
+  if (password && !isStorablePassword(password)) return "パスワードには半角の英数字・記号だけが使えます(日本語や改行は使えません)。";
+  if (/[\r\n]/.test(fields.name + fields.sentMailbox)) return "改行を含む値は使えません。";
+
+  // 保存済みのパスワードを、知らないうちに別のサーバや別のログイン名へ送らないようにする
+  const saved = getRealAccountFields();
+  const login = (f: { email: string; user: string }) => f.user || f.email;
+  const destinationChanged =
+    fields.imapHost !== saved.imapHost.toLowerCase() ||
+    fields.imapPort !== saved.imapPort ||
+    fields.smtpHost !== saved.smtpHost.toLowerCase() ||
+    fields.smtpPort !== saved.smtpPort ||
+    login(fields) !== login(saved);
+  if (!password && !forgetPassword && destinationChanged && getRealPassword()) {
+    return "接続先かログイン名を変えたときは、パスワードも入れ直してください。";
+  }
+  return { fields, password, forgetPassword };
 }
 
 export async function clearLogAction(): Promise<void> {
