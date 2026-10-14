@@ -18,16 +18,26 @@ export function isSameOrigin(request: Request): boolean {
 /** 進行状況を 1 行 1 JSON(NDJSON)で流すレスポンスを作る。 */
 export function ndjsonResponse(run: (send: (e: StreamEvent) => void) => Promise<void>): Response {
   const encoder = new TextEncoder();
+  // 画面の再読み込みなどで受け手が切れたら、それ以降は書き込まない(閉じたストリームへの書き込みは例外になる)
+  let closed = false;
   const stream = new ReadableStream({
     async start(controller) {
-      const send = (e: StreamEvent) => controller.enqueue(encoder.encode(JSON.stringify(e) + "\n"));
+      const send = (e: StreamEvent) => {
+        if (!closed) controller.enqueue(encoder.encode(JSON.stringify(e) + "\n"));
+      };
       try {
         await run(send);
       } catch (e) {
         if (!(e instanceof AiError)) console.error(e);
         send({ t: "error", message: e instanceof AiError ? e.message : "処理中にエラーが発生しました。" });
       }
-      controller.close();
+      if (!closed) {
+        closed = true;
+        controller.close();
+      }
+    },
+    cancel() {
+      closed = true;
     },
   });
   return new Response(stream, {
