@@ -1,3 +1,5 @@
+<img src="app/icon.svg" alt="" width="96" height="96">
+
 # Shiori Mail
 
 **AI の相棒「栞(しおり)」が、メールの処理を手伝ってくれる**、自分専用の IMAP / SMTP メールクライアントです。
