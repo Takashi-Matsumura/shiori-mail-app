@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { InboxIcon, LogIcon, PlusIcon, SearchIcon, SentIcon, SettingsIcon, TasksIcon } from "@/components/icons";
 import { NavLink } from "@/components/nav-link";
 import { SyncButton } from "@/components/sync-button";
 import { getActiveAccount } from "@/lib/accounts";
@@ -15,21 +16,25 @@ export async function Sidebar() {
           {account.email}
         </p>
       </div>
-      <Link href="/compose" className="rounded-md bg-accent px-3 py-2 text-center font-medium text-panel hover:opacity-90">
+      <Link
+        href="/compose"
+        className="flex items-center justify-center gap-2 rounded-md bg-accent px-3 py-2 font-medium text-panel hover:opacity-90"
+      >
+        <PlusIcon />
         新規作成
       </Link>
       <SyncButton />
       <nav className="flex flex-col gap-0.5">
-        <NavLink href="/mail/inbox" badge={counts.unread || undefined}>
+        <NavLink href="/mail/inbox" icon={<InboxIcon />} badge={counts.unread || undefined}>
           受信トレイ
         </NavLink>
-        <NavLink href="/mail/sent">送信済み</NavLink>
+        <NavLink href="/mail/sent" icon={<SentIcon />}>送信済み</NavLink>
         <p className="mt-3 px-2 text-xs text-muted">AI</p>
-        <NavLink href="/search">検索</NavLink>
-        <NavLink href="/tasks">予定・やること</NavLink>
+        <NavLink href="/search" icon={<SearchIcon />}>検索</NavLink>
+        <NavLink href="/tasks" icon={<TasksIcon />}>予定・やること</NavLink>
         <p className="mt-3 px-2 text-xs text-muted">仕組み</p>
-        <NavLink href="/inspector">通信ログ</NavLink>
-        <NavLink href="/settings">設定</NavLink>
+        <NavLink href="/inspector" icon={<LogIcon />}>通信ログ</NavLink>
+        <NavLink href="/settings" icon={<SettingsIcon />}>設定</NavLink>
       </nav>
     </div>
   );

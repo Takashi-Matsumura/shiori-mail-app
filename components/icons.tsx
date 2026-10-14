@@ -1,4 +1,4 @@
-// 畳んだパネル用の線画アイコン。色は親の文字色に従う。
+// サイドパネルの線画アイコン。色は親の文字色に従う。
 
 function Icon({ children }: { children: React.ReactNode }) {
   return (

@@ -3,7 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function NavLink({ href, badge, children }: { href: string; badge?: number; children: React.ReactNode }) {
+export function NavLink({
+  href,
+  icon,
+  badge,
+  children,
+}: {
+  href: string;
+  icon?: React.ReactNode;
+  badge?: number;
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const active = pathname === href || pathname.startsWith(href + "/");
   return (
@@ -14,7 +24,10 @@ export function NavLink({ href, badge, children }: { href: string; badge?: numbe
         active ? "bg-accent-soft font-medium text-accent" : "hover:bg-background"
       }`}
     >
-      <span>{children}</span>
+      <span className="flex items-center gap-2">
+        {icon}
+        {children}
+      </span>
       {badge ? <span className="text-xs tabular-nums">{badge}</span> : null}
     </Link>
   );
