@@ -1,7 +1,6 @@
 import "server-only";
 import { chatJson, embed, resolveEmbedModel, AiError, type Usage } from "@/lib/ai/client";
 import { getAiConfig } from "@/lib/ai/config";
-import { classifyWithJev, JevError } from "@/lib/ai/jev";
 import { EXAMPLES_SQL, KNN_K, KNN_MODEL_PREFIX, knnClassify, toExamples, toVector, type ExampleRow } from "@/lib/ai/knn";
 import {
   classifyPrompt,
@@ -25,14 +24,6 @@ export function saveAiResult(messageId: number, kind: string, model: string, res
          prompt_tokens = excluded.prompt_tokens, completion_tokens = excluded.completion_tokens, created = excluded.created`,
     )
     .run(messageId, kind, model, result, ms, usage.promptTokens, usage.completionTokens, Date.now());
-}
-
-async function classifyMessageWithJev(m: MessageRow): Promise<{ ms: number; summary: string }> {
-  const r = await classifyWithJev(m, process.env.TYPESAFE_API_KEY ?? "").catch((e) => {
-    throw e instanceof JevError ? new AiError(e.message) : e;
-  });
-  saveAiResult(m.id, "classify", r.model, JSON.stringify(r.value), r.ms, r.usage);
-  return { ms: r.ms, summary: `${r.value.category} / 優先度 ${r.value.priority}` };
 }
 
 /** あなたが確定した仕分けがあるか。あれば AI の処理で上書きしない。 */
@@ -75,8 +66,6 @@ async function classifyMessageWithKnn(m: MessageRow): Promise<{ ms: number; summ
 export async function classifyMessage(m: MessageRow, options: { preferLlm?: boolean } = {}): Promise<{ ms: number; summary: string }> {
   if (hasUserLabel(m.id)) return { ms: 0, summary: "あなたが確定済み" };
   const cfg = getAiConfig();
-  // 選択中のアカウントだけでなく、メールそのものがテストサーバのものかも確かめる(ID 指定のやり直しなど)
-  if (cfg.classifier === "jev" && m.account === "local") return classifyMessageWithJev(m);
   if (cfg.classifyKnn && !options.preferLlm) {
     const knn = await classifyMessageWithKnn(m);
     if (knn) return knn;

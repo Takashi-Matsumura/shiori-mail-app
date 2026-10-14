@@ -11,7 +11,7 @@ export async function AiRail() {
   const classified = countOf("classify");
   const high = stats.priorities["高"] ?? 0;
   const items = ITEM_TYPES.reduce((n, t) => n + (stats.items[t] ?? 0), 0);
-  const staysLocal = isLoopbackUrl(cfg.baseUrl) && isLoopbackUrl(cfg.embedBaseUrl) && cfg.classifier === "local";
+  const staysLocal = isLoopbackUrl(cfg.baseUrl) && isLoopbackUrl(cfg.embedBaseUrl);
   return (
     <div className="flex flex-col items-center gap-3 px-1 pb-3 text-[10px] leading-tight text-muted">
       <Ring label="仕分け" short="仕分け" done={classified} total={stats.inbox} />

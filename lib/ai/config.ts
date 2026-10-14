@@ -1,5 +1,4 @@
 import "server-only";
-import { getActiveAccount } from "@/lib/accounts";
 import { getSetting } from "@/lib/db";
 
 export type AiConfig = {
@@ -14,8 +13,6 @@ export type AiConfig = {
   thinking: boolean;
   /** 仕分けで、まず似たメールの仕分けから推定する(近傍法)。自信が無いときだけ会話用モデルに聞く */
   classifyKnn: boolean;
-  /** 仕分けを任せる先。"jev" なら TypeSafe の Jev(メールがマシンの外へ出る) */
-  classifier: "local" | "jev";
 };
 
 export const DEFAULT_AI_BASE_URL = "http://localhost:8080/v1";
@@ -31,9 +28,6 @@ export function getAiConfig(): AiConfig {
     embedModel: getSetting("ai_embed_model") || process.env.AI_EMBED_MODEL || "",
     thinking: getSetting("ai_thinking") === "on",
     classifyKnn: getSetting("ai_classify_knn") !== "off",
-    // キーと同じく環境変数でだけ切り替える。画面の操作だけでメールが外へ出るようにはしない。
-    // 実アカウントのメールは、設定にかかわらず外部の AI へは送らない
-    classifier: process.env.AI_CLASSIFIER === "jev" && getActiveAccount().isLocal ? "jev" : "local",
   };
 }
 

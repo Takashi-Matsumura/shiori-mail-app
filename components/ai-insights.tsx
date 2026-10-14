@@ -14,9 +14,6 @@ const KIND_LABEL: Record<string, string> = {
 // 人が読む速さの目安。日本語の黙読でよく使われる値で、あくまで換算用
 const READING_CHARS_PER_MIN = 500;
 
-// モデル名で外部の AI(TypeSafe の Jev)による処理を見分ける
-const isExternalModel = (model: string) => model.startsWith("jev-");
-
 const sum = (rows: AiRunStat[], key: "count" | "totalMs" | "promptTokens" | "completionTokens") => rows.reduce((n, r) => n + r[key], 0);
 
 /** 右パネル。ローカル AI がどこまで処理したかと、その結果どれだけ手間が減ったかを数字で見せる。 */
@@ -26,9 +23,7 @@ export async function AiInsights() {
   const stats = await getAiStats(account.id);
   const countOf = (kind: string) => sum(stats.runs.filter((r) => r.kind === kind), "count");
   const classified = countOf("classify");
-  const external = sum(stats.runs.filter((r) => isExternalModel(r.model)), "count");
-  const total = sum(stats.runs, "count") + stats.embedded;
-  const staysLocal = isLoopbackUrl(cfg.baseUrl) && isLoopbackUrl(cfg.embedBaseUrl) && cfg.classifier === "local";
+  const staysLocal = isLoopbackUrl(cfg.baseUrl) && isLoopbackUrl(cfg.embedBaseUrl);
   const high = stats.priorities["高"] ?? 0;
   const maxCategory = Math.max(1, ...CATEGORIES.map((c) => stats.categories[c] ?? 0));
   const itemTotal = ITEM_TYPES.reduce((n, t) => n + (stats.items[t] ?? 0), 0);
@@ -40,9 +35,7 @@ export async function AiInsights() {
         <p className="text-xs text-muted">
           {staysLocal
             ? "いまの設定では、メールはこのマシンの中だけで処理されます。"
-            : cfg.classifier === "jev"
-              ? "いまの設定では、仕分けのときにメールが外部の AI(Jev)へ送られます。"
-              : "いまの設定では、メールがこのマシンの外の AI へ送られます。"}
+            : "いまの設定では、メールがこのマシンの外の AI へ送られます。"}
         </p>
       </header>
 
@@ -118,7 +111,7 @@ export async function AiInsights() {
                     <td className="py-1">
                       {KIND_LABEL[r.kind] ?? r.kind}
                       <span className="block truncate text-muted" title={r.model}>
-                        {isExternalModel(r.model) ? `外部 ・ ${r.model}` : r.model}
+                        {r.model}
                       </span>
                     </td>
                     <td className="py-1 text-right tabular-nums">{r.count}</td>
@@ -144,15 +137,6 @@ export async function AiInsights() {
         )}
       </Section>
 
-      <Section title="処理した場所">
-        <dl className="grid grid-cols-[1fr_auto] gap-x-2 gap-y-1 text-xs">
-          <dt className="text-muted">このマシンの中</dt>
-          <dd className="text-right tabular-nums">{total - external} 件</dd>
-          <dt className="text-muted">外部の AI(Jev)</dt>
-          <dd className="text-right tabular-nums">{external} 件</dd>
-        </dl>
-        <p className="text-xs text-muted">保存されている結果のモデル名から数えています。</p>
-      </Section>
     </div>
   );
 }
