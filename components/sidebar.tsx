@@ -46,7 +46,7 @@ export async function Sidebar() {
           受信トレイ
         </NavLink>
         <NavLink href="/mail/sent" icon={<SentIcon />}>送信済み</NavLink>
-        <p className="mt-3 px-2 text-xs text-muted">AI</p>
+        <p className="mt-3 px-2 text-xs text-muted">栞</p>
         <NavLink href="/search" icon={<SearchIcon />}>検索</NavLink>
         <NavLink href="/tasks" icon={<TasksIcon />}>予定・やること</NavLink>
         <span className="mt-3" />

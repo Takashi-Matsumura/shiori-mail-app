@@ -10,7 +10,7 @@ export default function TasksPage() {
       <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
         <h1 className="text-xl font-semibold">予定・やること</h1>
         <p className="text-muted">
-          受信トレイのメールから、AI が日時のある予定・締切・依頼を抜き出した一覧です。日付の読み違いが起こりうるので、元のメールで確かめてください。
+          受信トレイのメールから、栞が日時のある予定・締切・依頼を抜き出した一覧です。日付の読み違いが起こりうるので、元のメールで確かめてください。
         </p>
         <Suspense fallback={<p className="text-muted">読み込み中…</p>}>
           <Tasks />

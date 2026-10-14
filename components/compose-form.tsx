@@ -95,10 +95,10 @@ export function ComposeForm({ defaults, replyTo, account }: Props) {
       </div>
 
       <fieldset className="flex flex-col gap-2 rounded-lg border border-line bg-panel p-3">
-        <legend className="px-1 font-medium">AI で下書き</legend>
+        <legend className="px-1 font-medium">栞に下書きを頼む</legend>
         <div className="flex gap-2">
           <input
-            aria-label="AI への指示"
+            aria-label="栞への指示"
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
             onKeyDown={(e) => {
@@ -138,7 +138,7 @@ export function ComposeForm({ defaults, replyTo, account }: Props) {
 
       {account.readOnly ? (
         <p className="rounded-lg border border-line bg-background p-3 text-sm">
-          読み取り専用モードなので送信できません。下書きと AI アシストは使えます。送るときは設定画面でモードを外してください。
+          読み取り専用モードなので送信できません。下書きと栞のアシストは使えます。送るときは設定画面でモードを外してください。
         </p>
       ) : (
         <label className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100">

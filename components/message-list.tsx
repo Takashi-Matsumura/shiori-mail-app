@@ -45,7 +45,7 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
         <h1 className="text-base font-semibold">
           {title} <span className="text-xs font-normal text-muted">{items.length} 通</span>
         </h1>
-        {mailbox === "inbox" ? <BatchButton kind="classify" label="AI で仕分ける" pending={pendingClassify} /> : null}
+        {mailbox === "inbox" ? <BatchButton kind="classify" label="栞に仕分けてもらう" pending={pendingClassify} /> : null}
         {classified ? (
           <div className="flex flex-wrap items-center gap-1 text-xs">
             <Chip active={category === null} onClick={() => setCategory(null)}>

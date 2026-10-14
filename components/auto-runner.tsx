@@ -49,9 +49,9 @@ export function AutoRunner() {
 
   return (
     <div className="text-xs">
-      <label className="flex items-center gap-1.5 whitespace-nowrap text-muted" title="画面を開いている間、5 分ごとにサーバと同期し、新着を AI で処理します">
+      <label className="flex items-center gap-1.5 whitespace-nowrap text-muted" title="画面を開いている間、5 分ごとにサーバと同期し、新着を栞が読みます">
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-        自動で同期・AI 処理
+        自動で同期・栞の処理
       </label>
     </div>
   );

@@ -206,7 +206,7 @@ export function SettingsForm({
       </fieldset>
 
       <fieldset className="flex flex-col gap-3 rounded-lg border border-line bg-panel p-4">
-        <legend className="px-1 font-semibold">ローカル AI</legend>
+        <legend className="px-1 font-semibold">ローカル AI(栞が使うモデル)</legend>
         <label className="flex flex-col gap-1">
           <span>ベース URL(OpenAI 互換 API)</span>
           <input name="aiBaseUrl" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={defaultBaseUrl} className={inputClass} autoComplete="off" />

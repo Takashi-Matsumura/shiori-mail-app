@@ -44,7 +44,7 @@ export function AiPanel({ messageId, threadSize, summary, threadSummary, classif
           <span aria-hidden="true" className="w-3 text-xs text-muted">
             {collapsed ? "▸" : "▾"}
           </span>
-          <span className="font-semibold">AI アシスト</span>
+          <span className="font-semibold">栞のアシスト</span>
           {collapsed ? (
             <>
               {classification?.value ? (
@@ -141,7 +141,7 @@ function StreamedText({ title, url, body, saved }: { title: string; url: string;
       }
     >
       {text ? <p className="whitespace-pre-wrap leading-relaxed">{text}</p> : null}
-      {state.running && !text ? <p className="text-muted">AI が読んでいます…</p> : null}
+      {state.running && !text ? <p className="text-muted">栞が読んでいます…</p> : null}
       {!state.running && meta ? <AiMeta {...meta} /> : null}
       {state.error ? <p role="alert" className="text-red-600">{state.error}</p> : null}
     </Row>
@@ -246,7 +246,7 @@ function ClassificationEditor({ messageId, value, labeled }: { messageId: number
           {pending ? "保存中…" : changed ? "直して確定" : "この内容で確定"}
         </button>
       </div>
-      <p className="text-xs text-muted">確定した仕分けは AI に上書きされず、似たメールを仕分けるときの手本になります。</p>
+      <p className="text-xs text-muted">確定した仕分けは栞に上書きされず、似たメールを仕分けるときの手本になります。</p>
       {error ? <p role="alert" className="text-red-600">{error}</p> : null}
     </div>
   );

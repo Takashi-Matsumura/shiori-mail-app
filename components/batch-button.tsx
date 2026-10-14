@@ -34,7 +34,7 @@ export function BatchButton({ kind, label, pending }: { kind: "classify" | "extr
           {p.done}/{p.total} {p.label} → {p.note}
         </p>
       ) : null}
-      {state.running && !p ? <p className="text-xs text-muted">AI に問い合わせ中…</p> : null}
+      {state.running && !p ? <p className="text-xs text-muted">栞が読んでいます…</p> : null}
       {!state.running && state.meta && p ? (
         <p className="text-xs text-muted">
           {p.done} 通を {seconds(state.meta.ms)}で処理(1 通あたり {seconds(state.meta.ms / Math.max(p.done, 1))})

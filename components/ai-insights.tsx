@@ -19,7 +19,7 @@ const sum = (rows: AiRunStat[], key: "count" | "totalMs" | "promptTokens" | "com
 /** 右パネル。ローカル AI がどこまで処理したかと、その結果どれだけ手間が減ったかを数字で見せる。 */
 export async function AiInsights() {
   const account = getAccount();
-  if (!account) return <p className="p-4 pt-0 text-xs text-muted">メールアカウントを設定すると、AI の処理状況がここに表示されます。</p>;
+  if (!account) return <p className="p-4 pt-0 text-xs text-muted">メールアカウントを設定すると、栞の働きがここに表示されます。</p>;
   const cfg = getAiConfig();
   const stats = await getAiStats(account.id);
   const countOf = (kind: string) => sum(stats.runs.filter((r) => r.kind === kind), "count");
@@ -32,7 +32,7 @@ export async function AiInsights() {
   return (
     <div className="flex flex-col gap-5 p-4 pt-0">
       <header className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold">AI の働き</h2>
+        <h2 className="text-base font-semibold">栞の働き</h2>
         <p className="text-xs text-muted">
           {staysLocal
             ? "いまの設定では、メールはこのマシンの中だけで処理されます。"
@@ -122,7 +122,7 @@ export async function AiInsights() {
               </tbody>
             </table>
             <dl className="grid grid-cols-[1fr_auto] gap-x-2 gap-y-1 text-xs">
-              <dt className="text-muted">AI の処理時間(合計)</dt>
+              <dt className="text-muted">栞が読んだ時間(合計)</dt>
               <dd className="text-right tabular-nums">{duration(sum(stats.runs, "totalMs"))}</dd>
               <dt className="text-muted">読ませた本文</dt>
               <dd className="text-right tabular-nums">{stats.chars.toLocaleString("ja-JP")} 字</dd>
@@ -133,7 +133,7 @@ export async function AiInsights() {
                 {sum(stats.runs, "promptTokens").toLocaleString("ja-JP")} / {sum(stats.runs, "completionTokens").toLocaleString("ja-JP")}
               </dd>
             </dl>
-            <p className="text-xs text-muted">目安は毎分 {READING_CHARS_PER_MIN} 字で換算。AI の処理は裏で進むので、待っている必要はありません。</p>
+            <p className="text-xs text-muted">目安は毎分 {READING_CHARS_PER_MIN} 字で換算。栞は裏で読み進めるので、待っている必要はありません。</p>
           </>
         )}
       </Section>

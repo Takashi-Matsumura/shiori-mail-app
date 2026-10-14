@@ -22,7 +22,7 @@ export function SyncButton() {
       // 結果はボタンの下ではなく、画面上端のヘッダーに出す
       const result = await syncAndProcess({
         signal: ac.signal,
-        report: ({ kind, text }) => notify({ source: "sync", kind, text: `同期と AI 処理: ${text}` }),
+        report: ({ kind, text }) => notify({ source: "sync", kind, text: `同期と栞の処理: ${text}` }),
         onStepDone: () => router.refresh(),
       });
       if (result === "busy") notify({ source: "sync", kind: "info", text: "自動処理が動いている最中です。終わると新着も処理されます。" });
@@ -36,7 +36,7 @@ export function SyncButton() {
       type="button"
       disabled={running}
       onClick={run}
-      title="サーバと同期し、そのまま新着を AI で処理します(索引 → 仕分け → 予定の抜き出し)"
+      title="サーバと同期し、そのまま新着を栞が読みます(索引 → 仕分け → 予定の抜き出し)"
       className="rounded-md border border-line px-3 py-1.5 hover:bg-background disabled:opacity-60"
     >
       {running ? "処理中…" : "サーバと同期"}

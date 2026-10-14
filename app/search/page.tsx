@@ -50,7 +50,7 @@ async function Search({ searchParams }: { searchParams: Promise<Record<string, s
           <Suspense fallback={<p className="text-muted">検索中…</p>}>
             <KeywordResults account={account.id} q={q} />
           </Suspense>
-          <Suspense fallback={<p className="text-muted">AI で検索中…</p>}>
+          <Suspense fallback={<p className="text-muted">栞が探しています…</p>}>
             <SemanticResults account={account.id} q={q} />
           </Suspense>
         </div>

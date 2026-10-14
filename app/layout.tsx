@@ -21,8 +21,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "学習用メーラー",
-  description: "メールの仕組みとローカル AI の使いどころを確かめるための学習用メーラー",
+  title: "Shiori Mail",
+  description: "AI の相棒「栞」が、メールの要約・仕分け・予定の抜き出しを手伝う、自分専用のメーラー",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -48,7 +48,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
             <SidePanel
               side="right"
-              label="AI の働き"
+              label="栞の働き"
               rail={
                 <Suspense fallback={null}>
                   <AiRail />

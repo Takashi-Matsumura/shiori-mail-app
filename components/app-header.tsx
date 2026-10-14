@@ -9,7 +9,7 @@ export function AppHeader() {
   const others = notices.filter((n) => n.kind !== "error");
   return (
     <header className="flex h-11 shrink-0 items-center gap-4 border-b border-line bg-panel px-4">
-      <p className="shrink-0 font-semibold">学習用メーラー</p>
+      <p className="shrink-0 font-semibold">Shiori Mail</p>
       <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
         {/* 読み上げでは、エラーはすぐに、それ以外は区切りのよいところで伝える */}
         <div role="status" className="flex min-w-0 items-center gap-2">
