@@ -97,3 +97,25 @@ export const PaperclipIcon = () => (
     <path d="m21 11.5-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9" />
   </Icon>
 );
+
+/** 前へ: 左向きの山形 */
+export const ChevronLeftIcon = () => (
+  <Icon>
+    <path d="m15 18-6-6 6-6" />
+  </Icon>
+);
+
+/** 次へ: 右向きの山形 */
+export const ChevronRightIcon = () => (
+  <Icon>
+    <path d="m9 18 6-6-6-6" />
+  </Icon>
+);
+
+/** リスト表示: 箇条書き */
+export const ListIcon = () => (
+  <Icon>
+    <path d="M9 6h11M9 12h11M9 18h11" />
+    <path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01" />
+  </Icon>
+);
