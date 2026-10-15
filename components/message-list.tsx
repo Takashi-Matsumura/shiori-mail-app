@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { BatchButton } from "@/components/batch-button";
 import { CategoryBadge } from "@/components/category-badge";
+import { PaperclipIcon } from "@/components/icons";
+import { Switch } from "@/components/switch";
 import { CATEGORIES } from "@/lib/ai/prompts";
 
 type Item = {
@@ -41,32 +43,33 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
 
   return (
     <div className="flex w-96 shrink-0 flex-col border-r border-line bg-panel">
-      <header className="flex flex-col gap-2 border-b border-line p-3">
-        <h1 className="text-base font-semibold">
+      <header className="flex flex-col gap-3 border-b border-line px-3.5 pb-3 pt-4">
+        <h1 className="text-lg font-semibold">
           {title} <span className="text-xs font-normal text-muted">{items.length} 通</span>
         </h1>
         {mailbox === "inbox" ? <BatchButton kind="classify" label="栞に仕分けてもらう" pending={pendingClassify} /> : null}
         {classified ? (
-          <div className="flex flex-wrap items-center gap-1 text-xs">
-            <Chip active={category === null} onClick={() => setCategory(null)}>
-              すべて
-            </Chip>
-            {CATEGORIES.map((c) => (
-              <Chip key={c} active={category === c} onClick={() => setCategory(category === c ? null : c)}>
-                {c} {items.filter((i) => i.category === c).length}
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-1.5 text-xs">
+              <Chip active={category === null} onClick={() => setCategory(null)}>
+                すべて
               </Chip>
-            ))}
-            <label className="ml-auto flex items-center gap-1 text-muted">
-              <input type="checkbox" checked={byPriority} onChange={(e) => setByPriority(e.target.checked)} />
-              優先度順
-            </label>
+              {CATEGORIES.map((c) => (
+                <Chip key={c} active={category === c} onClick={() => setCategory(category === c ? null : c)}>
+                  {c} <span className="tabular-nums opacity-70">{items.filter((i) => i.category === c).length}</span>
+                </Chip>
+              ))}
+            </div>
+            <div className="text-xs text-muted">
+              <Switch label="優先度の高い順に並べる" checked={byPriority} onChange={setByPriority} />
+            </div>
           </div>
         ) : null}
       </header>
-      <ul className="flex-1 overflow-y-auto">
+      <ul className="flex flex-1 flex-col gap-1 overflow-y-auto p-2">
         {shown.length === 0 ? (
           <li className="p-4 text-muted">
-            {items.length === 0 ? "メールがありません。左下の「サーバと同期」で取り込みます。" : "該当するメールがありません。"}
+            {items.length === 0 ? "メールがありません。左の「サーバと同期」で取り込みます。" : "該当するメールがありません。"}
           </li>
         ) : null}
         {shown.map((m) => {
@@ -76,17 +79,30 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
               <Link
                 href={`/mail/${mailbox}/${m.uid}`}
                 aria-current={selected ? "true" : undefined}
-                className={`block border-b border-line px-3 py-2 ${selected ? "bg-accent-soft" : "hover:bg-background"}`}
+                className={`relative flex flex-col gap-0.5 rounded-xl border py-2.5 pl-5 pr-3 transition-colors ${
+                  selected ? "border-accent bg-accent-soft" : "border-transparent hover:border-line hover:bg-background"
+                }`}
               >
+                {!m.seen ? (
+                  <span className="absolute left-2 top-[1.05rem] size-2 rounded-full bg-accent" aria-label="未読" />
+                ) : null}
                 <div className="flex items-baseline gap-2">
-                  {!m.seen ? <span className="h-2 w-2 shrink-0 self-center rounded-full bg-accent" aria-label="未読" /> : null}
-                  <span className={`min-w-0 flex-1 truncate ${m.seen ? "" : "font-semibold"}`}>{m.who}</span>
-                  <span className="shrink-0 text-xs tabular-nums text-muted">{m.date}</span>
+                  <span className={`min-w-0 flex-1 truncate ${m.seen ? "text-muted" : "font-semibold"}`}>{m.who}</span>
+                  <span className="shrink-0 text-[11px] tabular-nums text-muted">{m.date}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className={`min-w-0 flex-1 truncate ${m.seen ? "" : "font-semibold"}`}>{m.subject}</span>
-                  {m.threadSize > 1 ? <span className="shrink-0 rounded border border-line px-1 text-xs text-muted">{m.threadSize}</span> : null}
-                  {m.hasAttachments ? <span className="shrink-0 text-xs text-muted">添付</span> : null}
+                  {m.threadSize > 1 ? (
+                    <span className="shrink-0 rounded-full border border-line px-1.5 text-[11px] tabular-nums text-muted" title={`スレッド ${m.threadSize} 通`}>
+                      {m.threadSize}
+                    </span>
+                  ) : null}
+                  {m.hasAttachments ? (
+                    <span className="shrink-0 text-muted [&_svg]:size-3.5" title="添付あり">
+                      <PaperclipIcon />
+                      <span className="sr-only">添付あり</span>
+                    </span>
+                  ) : null}
                   {m.category ? <CategoryBadge category={m.category} priority={m.priority} /> : null}
                 </div>
                 <p className="truncate text-xs text-muted">{m.snippet}</p>
@@ -104,7 +120,10 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-full border px-2 py-0.5 ${active ? "border-accent bg-accent-soft text-accent" : "border-line hover:bg-background"}`}
+      type="button"
+      className={`rounded-full border px-2.5 py-1 transition-colors ${
+        active ? "border-accent bg-accent font-medium text-panel" : "border-line bg-panel hover:border-accent hover:text-accent"
+      }`}
     >
       {children}
     </button>

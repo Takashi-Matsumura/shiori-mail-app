@@ -5,6 +5,7 @@ import { useCallback, useId, useState, useTransition } from "react";
 import { clearClassificationLabelAction, labelClassificationAction } from "@/app/actions";
 import { AiMeta } from "@/components/ai-meta";
 import { CategoryBadge } from "@/components/category-badge";
+import { SparkleIcon } from "@/components/icons";
 import { CATEGORIES, PRIORITIES, type Classification, type ExtractedItem } from "@/lib/ai/prompts";
 import { useAiStream, type StreamMeta } from "@/lib/client/use-ai-stream";
 import { useStoredFlag } from "@/lib/client/use-stored-flag";
@@ -32,19 +33,22 @@ export function AiPanel({ messageId, threadSize, summary, threadSummary, classif
     threadSummary ? "スレッド要約あり" : null,
   ].filter(Boolean);
   return (
-    <section className="flex flex-col rounded-lg border border-line bg-panel">
+    <section className="flex flex-col rounded-xl border border-line bg-panel">
       <h2>
         <button
           type="button"
           onClick={() => setCollapsed(!collapsed)}
           aria-expanded={!collapsed}
           aria-controls={id}
-          className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-lg px-4 py-3 text-left hover:bg-background"
+          className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-xl px-3.5 py-3 text-left hover:bg-background"
         >
           <span aria-hidden="true" className="w-3 text-xs text-muted">
             {collapsed ? "▸" : "▾"}
           </span>
-          <span className="font-semibold">栞のアシスト</span>
+          <span className="flex items-center gap-1.5 font-medium text-accent [&_svg]:size-4">
+            <SparkleIcon />
+            栞のアシスト
+          </span>
           {collapsed ? (
             <>
               {classification?.value ? (
@@ -57,7 +61,7 @@ export function AiPanel({ messageId, threadSize, summary, threadSummary, classif
           )}
         </button>
       </h2>
-      <div id={id} hidden={collapsed} className="flex flex-col gap-3 px-4 pb-4">
+      <div id={id} hidden={collapsed} className="flex flex-col gap-3 px-3.5 pb-3.5">
         <StreamedText title="要約" url="/api/ai/summarize" body={{ id: messageId, scope: "message" }} saved={summary} />
         {threadSize > 1 ? (
           <StreamedText
@@ -90,7 +94,7 @@ export function AiPanel({ messageId, threadSize, summary, threadSummary, classif
               <ul className="flex flex-col gap-1">
                 {extraction.items.map((item, i) => (
                   <li key={i} className="flex flex-wrap items-baseline gap-2">
-                    <span className="rounded border border-line px-1.5 text-xs">{item.type}</span>
+                    <span className="rounded-full border border-line px-2 text-[11px]">{item.type}</span>
                     <span className="font-medium">{item.title}</span>
                     <span className="tabular-nums">{[item.date, item.time].filter(Boolean).join(" ")}</span>
                     <span className="text-muted">{item.detail}</span>
@@ -117,7 +121,7 @@ function Row({ title, action, children }: { title: string; action: React.ReactNo
   );
 }
 
-const buttonClass = "rounded-md border border-accent px-2.5 py-1 text-xs text-accent hover:bg-accent-soft disabled:opacity-60";
+const buttonClass = "rounded-full border border-accent px-3 py-1 text-xs text-accent transition-colors hover:bg-accent-soft disabled:opacity-60";
 
 /** 文章を少しずつ受け取って表示する(要約)。 */
 function StreamedText({ title, url, body, saved }: { title: string; url: string; body: unknown; saved: Saved<{ text: string }> }) {
@@ -178,7 +182,7 @@ function JsonTask({ title, kind, messageId, meta, locked = false, children }: {
   );
 }
 
-const selectClass = "rounded-md border border-line bg-panel px-1.5 py-1 text-xs focus:border-accent focus:outline-none";
+const selectClass = "rounded-lg border border-line bg-panel px-1.5 py-1 text-xs focus:border-accent focus:outline-none";
 
 /**
  * 仕分けの確定と修正。合っていればそのまま、違えば直してから確定する。
@@ -200,7 +204,7 @@ function ClassificationEditor({ messageId, value, labeled }: { messageId: number
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <CategoryBadge category={value.category} />
         <span className="whitespace-nowrap">優先度 {value.priority}</span>
-        <span className="rounded border border-accent px-1.5 text-xs text-accent">あなたが確定</span>
+        <span className="rounded-full border border-accent px-2 text-[11px] text-accent">あなたが確定</span>
         <button
           type="button"
           disabled={pending}

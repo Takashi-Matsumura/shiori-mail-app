@@ -81,3 +81,19 @@ export const CheckIcon = () => (
     <path d="m5 12.5 4.5 4.5L19 7.5" />
   </Icon>
 );
+
+/** 返信: 左へ折り返す矢印 */
+export const ReplyIcon = () => (
+  <Icon>
+    <path d="M9 17 4 12l5-5" />
+    <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+  </Icon>
+);
+
+
+/** 添付: クリップ */
+export const PaperclipIcon = () => (
+  <Icon>
+    <path d="m21 11.5-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9" />
+  </Icon>
+);
