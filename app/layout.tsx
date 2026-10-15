@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { InlineScript } from "@/components/inline-script";
 import { NoticeProvider } from "@/lib/client/notices";
 import { PaletteSync } from "@/lib/client/use-palette";
 import { DEFAULT_PALETTE, PALETTE_INIT_SCRIPT } from "@/lib/palette";
@@ -30,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: PALETTE_INIT_SCRIPT }} />
+        <InlineScript html={PALETTE_INIT_SCRIPT} />
       </head>
       <body className="flex h-full flex-col text-sm">
         <PaletteSync />

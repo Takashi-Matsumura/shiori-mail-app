@@ -38,9 +38,14 @@ export function AppHeader() {
         type="button"
         onClick={lock}
         title="ロックして、次は Touch ID で開く"
-        className="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs text-muted hover:bg-background hover:text-foreground"
+        aria-label="ロック"
+        className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-line text-muted hover:bg-background hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent"
       >
-        ロック
+        {/* 南京錠 */}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="4.5" y="10.5" width="15" height="10" rx="2" />
+          <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+        </svg>
       </button>
     </header>
   );

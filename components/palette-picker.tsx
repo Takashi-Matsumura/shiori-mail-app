@@ -1,6 +1,8 @@
 "use client";
 
 import { useId, useState } from "react";
+import { DisclosureButton } from "@/components/disclosure-button";
+import { InfoButton } from "@/components/info-button";
 import { usePalette } from "@/lib/client/use-palette";
 import { PALETTES } from "@/lib/palette";
 
@@ -14,24 +16,22 @@ export function PalettePicker() {
   const panelId = useId();
   const current = PALETTES.find((p) => p.id === palette) ?? PALETTES[0];
   return (
-    <fieldset className="flex flex-col gap-2 rounded-lg border border-line bg-panel p-4">
-      <legend className="px-1 font-semibold">テーマカラー</legend>
+    <fieldset className="flex flex-col gap-2 rounded-lg border border-line bg-panel p-5">
+      <legend className="flex items-center gap-1 px-1 font-semibold">
+        テーマカラー
+        <InfoButton title="テーマカラー">
+          <p>選ぶとすぐに切り替わります。</p>
+          <p>配色はこのブラウザに保存するので、別の端末やブラウザでは選び直してください。</p>
+        </InfoButton>
+      </legend>
       <div className="flex items-center justify-between gap-3">
         <p className="flex min-w-0 items-center gap-2 text-xs text-muted">
           <Swatch colors={current.swatch} small />
           {current.name}
         </p>
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          aria-expanded={open}
-          aria-controls={panelId}
-          className="shrink-0 rounded-md border border-line px-2.5 py-1 text-xs hover:bg-background"
-        >
-          {open ? "隠す" : "変更する"}
-        </button>
+        <DisclosureButton open={open} onToggle={() => setOpen(!open)} controls={panelId} label="テーマカラー" />
       </div>
-      <div id={panelId} hidden={!open} className="mt-1 flex flex-col gap-3">
+      <div id={panelId} hidden={!open} className="mt-3 flex flex-col gap-3">
         <div className="grid gap-2 sm:grid-cols-2">
           {PALETTES.map((p) => {
             const selected = p.id === palette;
@@ -59,7 +59,6 @@ export function PalettePicker() {
             );
           })}
         </div>
-        <p className="text-xs text-muted">選ぶとすぐに切り替わります。配色はこのブラウザに保存するので、別の端末やブラウザでは選び直してください。</p>
       </div>
     </fieldset>
   );

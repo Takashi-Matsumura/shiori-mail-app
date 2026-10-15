@@ -3,7 +3,7 @@ import { PalettePicker } from "@/components/palette-picker";
 import { SettingsForm } from "@/components/settings-form";
 import { getAccount, getRealAccountFields, type Account } from "@/lib/accounts";
 import { keychainAvailable, readPassword } from "@/lib/keychain";
-import { AiError, listModels } from "@/lib/ai/client";
+import { AiError, probeServer } from "@/lib/ai/client";
 import { DEFAULT_AI_BASE_URL, getAiConfig } from "@/lib/ai/config";
 import { io } from "next/cache";
 
@@ -30,12 +30,19 @@ async function Settings() {
   const cfg = getAiConfig();
   const separateEmbed = cfg.embedBaseUrl !== cfg.baseUrl;
   const load = (url: string) =>
-    listModels(url).then(
-      (models) => ({ models, error: null as string | null }),
-      (e) => ({ models: [] as string[], error: e instanceof AiError ? e.message : "モデル一覧を取得できませんでした。" }),
+    probeServer(url).then(
+      ({ models, server }) => ({ models, server, error: null as string | null }),
+      (e) => ({
+        models: [] as string[],
+        server: "",
+        error: e instanceof AiError ? e.message : "モデル一覧を取得できませんでした。",
+      }),
     );
   const chat = await load(cfg.baseUrl);
   const embed = separateEmbed ? await load(cfg.embedBaseUrl) : chat;
+  const chatModels = chat.models.filter((m) => !/embed/i.test(m));
+  // 埋め込み専用サーバなら、そこにあるモデルはすべて埋め込み用とみなす
+  const embedModels = separateEmbed ? embed.models : embed.models.filter((m) => /embed/i.test(m));
   const describe = (a: Account) =>
     `IMAP ${a.imap.host}:${a.imap.port}${a.imap.secure ? " (TLS)" : ""} / SMTP ${a.smtp.host}:${a.smtp.port}${a.smtp.secure ? " (TLS)" : ""}`;
   return (
@@ -53,9 +60,9 @@ async function Settings() {
         classifyKnn: cfg.classifyKnn,
       }}
       defaultBaseUrl={DEFAULT_AI_BASE_URL}
-      chatModels={chat.models.filter((m) => !/embed/i.test(m))}
-      // 埋め込み専用サーバなら、そこにあるモデルはすべて埋め込み用とみなす
-      embedModels={separateEmbed ? embed.models : embed.models.filter((m) => /embed/i.test(m))}
+      chatModels={chatModels}
+      embedModels={embedModels}
+      inUse={{ server: chat.server, model: cfg.chatModel || chatModels[0] || "" }}
       chatError={chat.error}
       embedError={separateEmbed ? embed.error : null}
     />

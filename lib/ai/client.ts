@@ -48,10 +48,35 @@ async function failure(res: Response): Promise<AiError> {
 }
 
 export async function listModels(baseUrl: string): Promise<string[]> {
+  return (await probeServer(baseUrl)).models;
+}
+
+// /models の owned_by は、サーバの種類ごとに決まった値になる
+const SERVER_BY_OWNER: Record<string, string> = {
+  llamacpp: "llama-server",
+  organization_owner: "LM Studio",
+  library: "Ollama",
+};
+// owned_by で分からないときは、それぞれの既定のポートから推す
+const SERVER_BY_PORT: Record<string, string> = { "8080": "llama-server", "1234": "LM Studio", "11434": "Ollama" };
+
+/** 接続先のモデル一覧と、画面に出すためのサーバの呼び名(llama-server など)。 */
+export async function probeServer(baseUrl: string): Promise<{ models: string[]; server: string }> {
   const res = await request(baseUrl, "/models", undefined, 5_000);
   if (!res.ok) throw await failure(res);
-  const json = (await res.json()) as { data?: { id: string }[] };
-  return (json.data ?? []).map((m) => m.id);
+  const json = (await res.json()) as { data?: { id: string; owned_by?: string }[] };
+  const data = json.data ?? [];
+  const owner = data.map((m) => m.owned_by ?? "").find((o) => o in SERVER_BY_OWNER);
+  return { models: data.map((m) => m.id), server: owner ? SERVER_BY_OWNER[owner] : guessServer(baseUrl) };
+}
+
+function guessServer(baseUrl: string): string {
+  try {
+    const u = new URL(baseUrl);
+    return SERVER_BY_PORT[u.port] ?? u.host;
+  } catch {
+    return baseUrl;
+  }
 }
 
 const isEmbeddingModel = (id: string) => /embed/i.test(id);
