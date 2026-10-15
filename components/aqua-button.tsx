@@ -14,13 +14,18 @@ const SIZES = {
   sm: "size-11 [&_svg]:size-5",
 };
 
+/** アクア風の見た目にする class。リンク(<Link>)をボタンと同じ見た目にするときに使う。 */
+export function aquaClass(tone: NonNullable<Props["tone"]> = "solid", size: keyof typeof SIZES = "md") {
+  return `aqua ${tone === "solid" ? "" : `aqua-${tone}`} ${SIZES[size]}`;
+}
+
 /** アクア風の正円ボタン。見た目は globals.css の .aqua に置いてある。 */
 export function AquaButton({ label, tone = "solid", size = "md", className = "", children, ...rest }: Props) {
   return (
     <button
       aria-label={label}
       title={label}
-      className={`aqua ${tone === "solid" ? "" : `aqua-${tone}`} ${SIZES[size]} ${className}`}
+      className={`${aquaClass(tone, size)} ${className}`}
       {...rest}
     >
       <span className="flex items-center justify-center">{children}</span>

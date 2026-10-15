@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { PaperclipIcon } from "@/components/icons";
 
 type Props = {
   text: string;
@@ -12,8 +13,8 @@ type Props = {
 /** メールの本文。HTML メールは無害化してから、切り替えで表示する。 */
 export function MessageBody({ size, ...props }: Props) {
   return (
-    <section className="rounded-lg border border-line bg-panel p-4">
-      <p className="mb-2 text-right text-xs text-muted">{size}</p>
+    <section className="rounded-xl border border-line bg-panel p-5 pt-3">
+      <p className="mb-2 text-right text-[11px] tabular-nums text-muted">{size}</p>
       <Body {...props} />
     </section>
   );
@@ -61,13 +62,13 @@ function Body({ text, html, attachments }: Omit<Props, "size">) {
     <div className="flex flex-col gap-3">
       {html ? (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <div className="flex overflow-hidden rounded-md border border-line">
+          <div className="flex rounded-full border border-line bg-background p-0.5">
             {(["text", "html"] as const).map((m) => (
               <button
                 key={m}
                 aria-pressed={mode === m}
                 onClick={() => setMode(m)}
-                className={`px-2.5 py-1 ${mode === m ? "bg-accent-soft text-accent" : "hover:bg-background"}`}
+                className={`rounded-full px-3 py-0.5 transition-colors ${mode === m ? "bg-panel font-medium text-accent shadow-sm" : "text-muted hover:text-foreground"}`}
               >
                 {m === "text" ? "テキスト" : "HTML"}
               </button>
@@ -89,7 +90,7 @@ function Body({ text, html, attachments }: Omit<Props, "size">) {
           sandbox=""
           referrerPolicy="no-referrer"
           srcDoc={srcDoc}
-          className="h-[28rem] w-full rounded border border-line bg-white"
+          className="h-[28rem] w-full rounded-lg border border-line bg-white"
         />
       ) : (
         <div className="whitespace-pre-wrap break-words leading-relaxed">{text || "(本文なし)"}</div>
@@ -97,8 +98,10 @@ function Body({ text, html, attachments }: Omit<Props, "size">) {
       {attachments.length > 0 ? (
         <ul className="flex flex-wrap gap-2 border-t border-line pt-3">
           {attachments.map((a, i) => (
-            <li key={i} className="rounded-md border border-line px-2 py-1 text-xs">
-              {a.filename} <span className="text-muted">{a.contentType} ・ {a.size}</span>
+            <li key={i} className="flex items-center gap-1.5 rounded-lg border border-line bg-background px-2.5 py-1.5 text-xs [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted">
+              <PaperclipIcon />
+              <span className="font-medium">{a.filename}</span>
+              <span className="text-muted">{a.contentType} ・ {a.size}</span>
             </li>
           ))}
         </ul>

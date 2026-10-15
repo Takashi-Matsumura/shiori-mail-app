@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AiPanel } from "@/components/ai-panel";
+import { aquaClass } from "@/components/aqua-button";
+import { ReplyIcon } from "@/components/icons";
 import { MessageBody } from "@/components/message-body";
-import { SeenControl } from "@/components/seen-control";
+import { MarkSeen } from "@/components/mark-seen";
 import { requireAccount } from "@/lib/accounts";
 import type { Classification, ExtractedItem } from "@/lib/ai/prompts";
 import { bytes, fullDate } from "@/lib/format";
@@ -48,36 +50,31 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
 
   return (
     <article className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
-      <header className="flex flex-col gap-2">
+      <header className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-xl font-semibold">{message.subject || "(件名なし)"}</h1>
-          <div className="flex shrink-0 items-center gap-2">
-            <SeenControl
-              key={message.id}
-              mailbox={box.slug}
-              uid={message.uid}
-              seen={message.seen === 1}
-            />
-            <Link href={`/compose?reply=${message.id}`} className="rounded-md bg-accent px-3 py-1.5 font-medium text-panel hover:opacity-90">
-              返信
-            </Link>
-          </div>
+          <h1 className="min-w-0 pt-2 text-xl font-semibold break-words">{message.subject || "(件名なし)"}</h1>
+          <MarkSeen key={message.id} mailbox={box.slug} uid={message.uid} seen={message.seen === 1} />
+          <Link href={`/compose?reply=${message.id}`} aria-label="返信" title="返信" className={aquaClass("solid", "md")}>
+            <span className="flex items-center justify-center">
+              <ReplyIcon />
+            </span>
+          </Link>
         </div>
-        <dl className="grid grid-cols-[4rem_1fr] gap-x-2 gap-y-0.5 text-muted">
+        <dl className="grid grid-cols-[4rem_1fr] gap-x-2 gap-y-1 rounded-xl border border-line bg-panel px-3.5 py-3 text-muted">
           <dt>差出人</dt>
-          <dd className="text-foreground">
-            {message.from_name} <span className="text-muted">&lt;{message.from_addr}&gt;</span>
+          <dd className="min-w-0 break-words text-foreground">
+            <span className="font-medium">{message.from_name}</span> <span className="text-muted">&lt;{message.from_addr}&gt;</span>
           </dd>
           <dt>宛先</dt>
-          <dd>{message.to_text}</dd>
+          <dd className="min-w-0 break-words">{message.to_text}</dd>
           {message.cc_text ? (
             <>
               <dt>Cc</dt>
-              <dd>{message.cc_text}</dd>
+              <dd className="min-w-0 break-words">{message.cc_text}</dd>
             </>
           ) : null}
           <dt>日時</dt>
-          <dd>{fullDate(message.date)}</dd>
+          <dd className="tabular-nums">{fullDate(message.date)}</dd>
         </dl>
       </header>
 
@@ -101,25 +98,32 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
       />
 
       {thread.length > 1 ? (
-        <section className="rounded-lg border border-line bg-panel p-4">
-          <h2 className="mb-1 font-semibold">このスレッド({thread.length} 通)</h2>
-          <p className="mb-2 text-xs text-muted">
+        <section className="flex flex-col gap-2 rounded-xl border border-line bg-panel p-3.5">
+          <h2 className="font-medium">
+            このスレッド <span className="text-xs font-normal text-muted">{thread.length} 通</span>
+          </h2>
+          <p className="text-xs text-muted">
             References / In-Reply-To ヘッダの Message-ID をたどって、受信と送信済みをまたいでまとめています。
           </p>
-          <ol className="flex flex-col">
-            {thread.map((t) => (
-              <li key={t.id}>
-                <Link
-                  href={`/mail/${t.mailbox}/${t.uid}`}
-                  aria-current={t.id === message.id ? "true" : undefined}
-                  className={`flex gap-3 rounded px-2 py-1 ${t.id === message.id ? "bg-accent-soft" : "hover:bg-background"}`}
-                >
-                  <span className="w-40 shrink-0 text-xs tabular-nums text-muted">{fullDate(t.date)}</span>
-                  <span className="w-28 shrink-0 truncate">{t.mailbox === "sent" ? "自分" : t.from_name || t.from_addr}</span>
-                  <span className="min-w-0 flex-1 truncate text-muted">{t.text.replace(/\s+/g, " ").slice(0, 80)}</span>
-                </Link>
-              </li>
-            ))}
+          <ol className="flex flex-col gap-0.5">
+            {thread.map((t) => {
+              const current = t.id === message.id;
+              return (
+                <li key={t.id}>
+                  <Link
+                    href={`/mail/${t.mailbox}/${t.uid}`}
+                    aria-current={current ? "true" : undefined}
+                    className={`flex items-baseline gap-3 rounded-lg px-2.5 py-1.5 ${current ? "bg-accent-soft" : "hover:bg-background"}`}
+                  >
+                    <span className="w-40 shrink-0 text-xs tabular-nums text-muted">{fullDate(t.date)}</span>
+                    <span className={`w-28 shrink-0 truncate ${current ? "font-medium text-accent" : ""}`}>
+                      {t.mailbox === "sent" ? "自分" : t.from_name || t.from_addr}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-muted">{t.text.replace(/\s+/g, " ").slice(0, 80)}</span>
+                  </Link>
+                </li>
+              );
+            })}
           </ol>
         </section>
       ) : null}

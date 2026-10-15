@@ -8,7 +8,7 @@ const STYLES: Record<string, string> = {
 
 export function CategoryBadge({ category, priority }: { category: string; priority?: string | null }) {
   return (
-    <span className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs ${STYLES[category] ?? STYLES["宣伝"]}`}>
+    <span className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-2 py-px text-[11px] font-medium ${STYLES[category] ?? STYLES["宣伝"]}`}>
       {category}
       {priority === "高" ? <span className="font-bold">!</span> : null}
     </span>
