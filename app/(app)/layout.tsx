@@ -3,6 +3,7 @@ import { AiInsights } from "@/components/ai-insights";
 import { AiRail } from "@/components/ai-rail";
 import { AppHeader } from "@/components/app-header";
 import { IdleLock } from "@/components/idle-lock";
+import { PanelShortcuts } from "@/components/panel-shortcuts";
 import { SidePanel } from "@/components/side-panel";
 import { Sidebar } from "@/components/sidebar";
 import { SidebarRail } from "@/components/sidebar-rail";
@@ -12,6 +13,7 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <>
       <IdleLock />
+      <PanelShortcuts />
       <AppHeader />
       <div className="flex min-h-0 flex-1">
         <SidePanel
