@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { CloseIcon } from "@/components/icons";
 
 /**
  * 設定項目の説明を、ⓘ を押したときだけダイアログで見せる。慣れた人には説明文が多すぎるので、ふだんは畳んでおく。
@@ -29,7 +30,8 @@ export function InfoButton({ title, children }: { title: string; children: React
   );
 }
 
-function InfoDialog({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+/** 説明用のダイアログ。開いた状態で描かれ、閉じると onClose が呼ばれる。 */
+export function InfoDialog({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     ref.current?.showModal();
@@ -47,16 +49,20 @@ function InfoDialog({ title, onClose, children }: { title: string; onClose: () =
       className="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-line bg-panel p-0 text-sm text-foreground shadow-lg backdrop:bg-black/40"
     >
       <div className="flex flex-col gap-3 p-5">
-        <h2 className="font-semibold">{title}</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="font-semibold">{title}</h2>
+          <button
+            type="button"
+            autoFocus
+            onClick={() => ref.current?.close()}
+            aria-label="閉じる"
+            title="閉じる"
+            className="-m-1.5 shrink-0 rounded-md p-1.5 text-muted hover:bg-background hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent"
+          >
+            <CloseIcon />
+          </button>
+        </div>
         <div className="flex flex-col gap-2 leading-relaxed">{children}</div>
-        <button
-          type="button"
-          autoFocus
-          onClick={() => ref.current?.close()}
-          className="self-end rounded-md border border-line px-3 py-1.5 text-xs hover:bg-background"
-        >
-          閉じる
-        </button>
       </div>
     </dialog>
   );
