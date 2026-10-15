@@ -11,7 +11,8 @@ import { deletePassword, isStorablePassword, keychainAvailable, writePassword } 
 import { setSeenFlag, syncAccount, verifyImap, type MailboxSlug } from "@/lib/mail/imap";
 import { sendMail, verifySmtp, type SendResult } from "@/lib/mail/smtp";
 
-export type ActionState = { ok: boolean; message: string } | null;
+/** section は、入力の誤りがどの欄のものか(設定画面で、その欄を開いて見せるため) */
+export type ActionState = { ok: boolean; message: string; section?: "account" | "ai" } | null;
 
 const NO_ACCOUNT = "メールアカウントが未設定です。設定画面で登録してください。";
 
@@ -133,7 +134,7 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
       // URL に埋め込んだ認証情報(user:pass@)は保存も送信もしない
       valid = ["http:", "https:"].includes(u.protocol) && !u.username && !u.password;
     } catch {}
-    if (!valid) return { ok: false, message: "AI のベース URL は http:// か https:// で始まる URL にしてください。" };
+    if (!valid) return { ok: false, section: "ai", message: "AI のベース URL は http:// か https:// で始まる URL にしてください。" };
   }
   if (real.password) {
     if (!keychainAvailable) return { ok: false, message: "パスワードの保存先(キーチェーン)は macOS でだけ使えます。" };
@@ -225,7 +226,7 @@ function parseRealAccountForm(formData: FormData) {
     fields.smtpPort !== saved.smtpPort ||
     login(fields) !== login(saved);
   if (!password && !forgetPassword && destinationChanged && getRealPassword()) {
-    return "接続先かログイン名を変えたときは、パスワードも入れ直してください。";
+    return "接続先かログイン名を変えたときは、パスワードも入れ直してください(入れ直すまで、設定は保存されません)。";
   }
   return { fields, password, forgetPassword };
 }
