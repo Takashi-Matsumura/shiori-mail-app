@@ -123,3 +123,140 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+/*
+ * アクア風の丸ボタン(components/aqua-button.tsx)。
+ * --tint を下地の色にし、上半分のつや(::before)と下からの照り返しで、ガラス玉のような透明感を出す。
+ * テーマの色(--accent など)から組み立てるので、配色を変えても追従する。
+ */
+@layer components {
+  .aqua {
+    --tint: var(--accent);
+    --ink: #fff;
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    border-radius: 9999px;
+    color: var(--ink);
+    border: 1px solid color-mix(in oklab, var(--tint), black 30%);
+    background:
+      radial-gradient(110% 70% at 50% 108%, color-mix(in oklab, var(--tint), white 55%) 0%, transparent 65%),
+      linear-gradient(180deg, color-mix(in oklab, var(--tint), white 12%) 0%, var(--tint) 55%, color-mix(in oklab, var(--tint), black 22%) 100%);
+    box-shadow:
+      0 1px 1px rgb(0 0 0 / 0.12),
+      0 8px 18px -6px color-mix(in oklab, var(--tint), transparent 25%),
+      inset 0 -3px 8px color-mix(in oklab, var(--tint), white 40%),
+      inset 0 1px 2px rgb(0 0 0 / 0.18);
+    transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    cursor: pointer;
+  }
+
+  /* 上半分のつや */
+  .aqua::before {
+    content: "";
+    position: absolute;
+    top: 4%;
+    left: 13%;
+    right: 13%;
+    height: 48%;
+    border-radius: 50% 50% 42% 42% / 64% 64% 36% 36%;
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.9) 0%, rgb(255 255 255 / 0.08) 100%);
+    pointer-events: none;
+  }
+
+  .aqua > * {
+    position: relative;
+    filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.3));
+  }
+
+  .aqua:hover:not(:disabled) {
+    transform: translateY(-1px);
+    filter: brightness(1.07) saturate(1.1);
+  }
+
+  .aqua:active:not(:disabled) {
+    transform: translateY(0) scale(0.96);
+    box-shadow:
+      0 1px 1px rgb(0 0 0 / 0.12),
+      inset 0 -2px 6px color-mix(in oklab, var(--tint), white 30%),
+      inset 0 2px 5px rgb(0 0 0 / 0.3);
+  }
+
+  .aqua:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  .aqua:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    filter: saturate(0.15);
+  }
+
+  /* 透明なガラス玉(取り消しなど、目立たせない操作) */
+  .aqua-glass {
+    --tint: var(--muted);
+    --ink: var(--muted);
+    border-color: color-mix(in oklab, var(--line), var(--muted) 25%);
+    background:
+      radial-gradient(110% 70% at 50% 108%, color-mix(in oklab, var(--panel), transparent 20%) 0%, transparent 65%),
+      linear-gradient(180deg, color-mix(in oklab, var(--panel), transparent 15%) 0%, color-mix(in oklab, var(--muted), transparent 85%) 100%);
+    box-shadow:
+      0 1px 1px rgb(0 0 0 / 0.08),
+      0 6px 14px -8px rgb(0 0 0 / 0.25),
+      inset 0 -3px 8px color-mix(in oklab, var(--panel), transparent 30%),
+      inset 0 1px 2px rgb(0 0 0 / 0.1);
+    backdrop-filter: blur(6px);
+  }
+
+  .aqua-glass > * {
+    filter: none;
+  }
+
+  .aqua-glass:hover:not(:disabled) {
+    --ink: var(--foreground);
+  }
+
+  /* 色付きの半透明(栞の操作)。下地が透けて見える */
+  .aqua-jelly {
+    --ink: var(--accent);
+    border-color: color-mix(in oklab, var(--tint), transparent 45%);
+    background:
+      radial-gradient(110% 70% at 50% 108%, color-mix(in oklab, var(--tint), transparent 40%) 0%, transparent 65%),
+      linear-gradient(180deg, color-mix(in oklab, var(--tint), transparent 88%) 0%, color-mix(in oklab, var(--tint), transparent 70%) 100%);
+    box-shadow:
+      0 1px 1px rgb(0 0 0 / 0.08),
+      0 8px 16px -8px color-mix(in oklab, var(--tint), transparent 30%),
+      inset 0 -3px 8px color-mix(in oklab, var(--tint), transparent 55%),
+      inset 0 1px 2px rgb(0 0 0 / 0.1);
+    backdrop-filter: blur(6px);
+  }
+
+  .aqua-jelly > * {
+    filter: none;
+  }
+}
+
+/* 暗い配色では --accent が明るい色になるので、塗りのボタンの記号は暗い色にする */
+@media (prefers-color-scheme: dark) {
+  .aqua {
+    --ink: var(--background);
+  }
+
+  .aqua-glass {
+    --ink: var(--muted);
+  }
+
+  .aqua-jelly {
+    --ink: var(--accent);
+  }
+
+  .aqua::before {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0.04) 100%);
+  }
+
+  .aqua > * {
+    filter: none;
+  }
+}
