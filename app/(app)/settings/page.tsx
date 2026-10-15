@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { PalettePicker } from "@/components/palette-picker";
 import { SettingsForm } from "@/components/settings-form";
 import { getAccount, getRealAccountFields, type Account } from "@/lib/accounts";
 import { keychainAvailable, readPassword } from "@/lib/keychain";
@@ -14,6 +15,8 @@ export default function SettingsPage() {
         <Suspense fallback={<p className="text-muted">読み込み中…</p>}>
           <Settings />
         </Suspense>
+        {/* めったに変えないので最後に置く。選んだ時点で反映されるので、上の「保存」とは関係しない */}
+        <PalettePicker />
       </div>
     </div>
   );

@@ -1,6 +1,50 @@
 @import "tailwindcss";
 
+/*
+ * テーマカラー。設定画面で選び、<html data-palette="..."> で切り替える(一覧は lib/palette.ts)。
+ * 属性が無いとき・知らない値のときは、既定の「若竹と蔵書印」になる。
+ */
 :root {
+  --background: #f5f6f2;
+  --foreground: #1f231f;
+  --panel: #ffffff;
+  --line: #dfe3da;
+  --muted: #6a7068;
+  --accent: #4f6e58;
+  --accent-soft: #e5ede6;
+}
+
+:root[data-palette="enji"] {
+  --background: #f8f3f1;
+  --foreground: #2a1e20;
+  --panel: #fffdfc;
+  --line: #e9dcd8;
+  --muted: #7a6a6c;
+  --accent: #8c3346;
+  --accent-soft: #f4e3e6;
+}
+
+:root[data-palette="fuji"] {
+  --background: #f6f4f8;
+  --foreground: #221f2a;
+  --panel: #ffffff;
+  --line: #e2dde9;
+  --muted: #6f6a7a;
+  --accent: #66548f;
+  --accent-soft: #ebe6f4;
+}
+
+:root[data-palette="sakuranezu"] {
+  --background: #faf5f5;
+  --foreground: #2b2224;
+  --panel: #ffffff;
+  --line: #eddfe1;
+  --muted: #806f73;
+  --accent: #a84d65;
+  --accent-soft: #f8e6ea;
+}
+
+:root[data-palette="fukamidori"] {
   --background: #f6f5f1;
   --foreground: #1c1b19;
   --panel: #ffffff;
@@ -24,6 +68,46 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    --background: #141714;
+    --foreground: #e5ebe5;
+    --panel: #1c201c;
+    --line: #313830;
+    --muted: #9ca79c;
+    --accent: #9cc2a5;
+    --accent-soft: #22302a;
+  }
+
+  :root[data-palette="enji"] {
+    --background: #1a1415;
+    --foreground: #efe5e6;
+    --panel: #231b1d;
+    --line: #3d3033;
+    --muted: #ab9a9d;
+    --accent: #e08c9c;
+    --accent-soft: #3e2329;
+  }
+
+  :root[data-palette="fuji"] {
+    --background: #17151c;
+    --foreground: #e9e6f0;
+    --panel: #1f1c26;
+    --line: #35303f;
+    --muted: #a39db0;
+    --accent: #b8a6e0;
+    --accent-soft: #2c2640;
+  }
+
+  :root[data-palette="sakuranezu"] {
+    --background: #1b1617;
+    --foreground: #f1e7e9;
+    --panel: #251e20;
+    --line: #41353a;
+    --muted: #b3a2a7;
+    --accent: #f0aabb;
+    --accent-soft: #452a33;
+  }
+
+  :root[data-palette="fukamidori"] {
     --background: #151513;
     --foreground: #e9e6df;
     --panel: #1e1e1b;

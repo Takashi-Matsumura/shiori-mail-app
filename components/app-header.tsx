@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { ShioriLogo } from "@/components/shiori-logo";
 import { useNotices, type Notice } from "@/lib/client/notices";
 
 async function lock() {
@@ -18,8 +18,7 @@ export function AppHeader() {
   return (
     <header className="flex h-11 shrink-0 items-center gap-4 border-b border-line bg-panel px-4">
       <p className="flex shrink-0 items-center gap-2 font-semibold">
-        {/* app/icon.svg を Next.js が /icon.svg として配信している。名前のすぐ横に置く飾りなので、読み上げでは省く */}
-        <Image src="/icon.svg" alt="" width={24} height={24} unoptimized priority />
+        <ShioriLogo size={24} />
         Shiori Mail
       </p>
       <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
