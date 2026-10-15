@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { Switch } from "@/components/switch";
 import { useNotices } from "@/lib/client/notices";
 import { syncAndProcess } from "@/lib/client/sync-and-process";
 import { useStoredFlag } from "@/lib/client/use-stored-flag";
@@ -48,11 +49,13 @@ export function AutoRunner() {
   }, [enabled, router, notify, dismiss]);
 
   return (
-    <div className="text-xs">
-      <label className="flex items-center gap-1.5 whitespace-nowrap text-muted" title="画面を開いている間、5 分ごとにサーバと同期し、新着を栞が読みます">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-        自動で同期・栞の処理
-      </label>
+    <div className="text-xs text-muted">
+      <Switch
+        label="自動同期"
+        checked={enabled}
+        onChange={setEnabled}
+        title="画面を開いている間、5 分ごとにサーバと同期し、新着を栞が読みます"
+      />
     </div>
   );
 }
