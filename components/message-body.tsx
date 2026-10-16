@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { PaperclipIcon } from "@/components/icons";
 
 type Props = {
@@ -10,7 +10,7 @@ type Props = {
   attachments: { filename: string; contentType: string; size: string }[];
 };
 
-/** メールの本文。HTML メールは無害化してから、切り替えで表示する。 */
+/** メールの本文。HTML のあるメールは HTML(無害化したもの)を先に見せ、テキストに切り替えられる。 */
 export function MessageBody({ size, ...props }: Props) {
   return (
     <section className="rounded-xl border border-line bg-panel p-5 pt-3">
@@ -46,11 +46,15 @@ function sanitizeHtml(html: string): { body: string; remoteImages: number } {
   return { body: styles + doc.body.innerHTML, remoteImages };
 }
 
+const noop = () => () => {};
+
 function Body({ text, html, attachments }: Omit<Props, "size">) {
-  const [mode, setMode] = useState<"text" | "html">("text");
+  const [mode, setMode] = useState<"text" | "html">(html ? "html" : "text");
   const [allowImages, setAllowImages] = useState(false);
-  // HTML 表示に切り替えたとき(ブラウザ上)にだけ解析する
-  const clean = useMemo(() => (mode === "html" && html ? sanitizeHtml(html) : null), [mode, html]);
+  // 無害化に使う DOMParser はブラウザにしか無い。サーバでの描画(と、それに合わせる最初の描画)では解析せず、
+  // 本文の枠だけ出しておき、ブラウザで描き直すときに解析する
+  const inBrowser = useSyncExternalStore(noop, () => true, () => false);
+  const clean = useMemo(() => (inBrowser && mode === "html" && html ? sanitizeHtml(html) : null), [inBrowser, mode, html]);
   const remoteImages = clean?.remoteImages ?? 0;
   // 無害化に加えて、sandbox 付きの iframe と CSP で二重に閉じ込める。スクリプトは動かず、
   // 外部への通信(開封確認用の画像や CSS からの読み込み)も、許可するまで起きない。
@@ -63,7 +67,7 @@ function Body({ text, html, attachments }: Omit<Props, "size">) {
       {html ? (
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <div className="flex rounded-full border border-line bg-background p-0.5">
-            {(["text", "html"] as const).map((m) => (
+            {(["html", "text"] as const).map((m) => (
               <button
                 key={m}
                 aria-pressed={mode === m}
@@ -83,7 +87,9 @@ function Body({ text, html, attachments }: Omit<Props, "size">) {
           {mode === "html" ? <span className="text-muted">リンクとスクリプトは無効化しています(リンク先はマウスを重ねると表示)</span> : null}
         </div>
       ) : null}
-      {mode === "html" && clean ? (
+      {mode === "html" && !clean ? (
+        <div aria-hidden="true" className="h-[28rem] w-full rounded-lg border border-line bg-white" />
+      ) : mode === "html" && clean ? (
         <iframe
           key={String(allowImages)}
           title="HTML 本文"
