@@ -7,6 +7,7 @@ import { BatchButton } from "@/components/batch-button";
 import { CategoryBadge } from "@/components/category-badge";
 import { CheckIcon, PaperclipIcon } from "@/components/icons";
 import { Switch } from "@/components/switch";
+import { TrashShown } from "@/components/trash-shown";
 import { CATEGORIES } from "@/lib/ai/prompts";
 import { useHiddenCategories } from "@/lib/client/use-hidden-categories";
 import { useStoredFlag } from "@/lib/client/use-stored-flag";
@@ -71,6 +72,8 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
             </div>
           </div>
         ) : null}
+        {/* 何かを隠しているときだけ出す(絞り込まずに受信トレイを丸ごと移せないように) */}
+        {mailbox === "inbox" && hiddenCount > 0 ? <TrashShown items={shown} /> : null}
         {mailbox === "inbox" ? (
           <div className="text-xs text-muted">
             <Switch

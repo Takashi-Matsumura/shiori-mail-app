@@ -8,7 +8,7 @@ import { CATEGORIES, PRIORITIES } from "@/lib/ai/prompts";
 import { requireSession } from "@/lib/auth/session";
 import { getDb, setSetting } from "@/lib/db";
 import { deletePassword, isStorablePassword, keychainAvailable, writePassword } from "@/lib/keychain";
-import { setSeenFlag, syncAccount, verifyImap, type MailboxSlug } from "@/lib/mail/imap";
+import { TrashError, moveToTrash, setSeenFlag, syncAccount, verifyImap, type MailboxSlug } from "@/lib/mail/imap";
 import { sendMail, verifySmtp, type SendResult } from "@/lib/mail/smtp";
 
 /** section は、入力の誤りがどの欄のものか(設定画面で、その欄を開いて見せるため) */
@@ -308,4 +308,37 @@ export async function setDoneAction(messageId: number, done: boolean): Promise<A
   }
   refresh();
   return { ok: true, message: done ? "完了にしました" : "完了を外しました" };
+}
+
+/** 一度にゴミ箱へ移せる通数。押し間違いで受信トレイが丸ごと消えないよう、上限を置く */
+const TRASH_LIMIT = 500;
+
+/**
+ * 受信トレイのメールをまとめてサーバのゴミ箱へ移す。uids は一覧に表示していたメール。
+ * 手元に控えのあるメールだけを対象にし、画面で見ていない UID は受け付けない。
+ */
+export async function trashMessagesAction(uids: number[]): Promise<ActionState> {
+  await requireSession();
+  if (!Array.isArray(uids) || uids.length === 0 || !uids.every((u) => Number.isInteger(u) && u > 0)) {
+    return { ok: false, message: "不正な指定です" };
+  }
+  const unique = [...new Set(uids)];
+  if (unique.length > TRASH_LIMIT) return { ok: false, message: `一度に移せるのは ${TRASH_LIMIT} 通までです。` };
+  const account = getAccount();
+  if (!account) return { ok: false, message: NO_ACCOUNT };
+  if (account.readOnly) {
+    return { ok: false, message: "読み取り専用モードなので削除しません。削除するときは設定画面でモードを外してください。" };
+  }
+  const exists = getDb().prepare("SELECT 1 FROM messages WHERE account = ? AND mailbox = 'inbox' AND uid = ?");
+  const targets = unique.filter((uid) => exists.get(account.id, uid));
+  if (targets.length !== unique.length) {
+    return { ok: false, message: "一覧が古くなっています。再読み込みしてから、もう一度選んでください。" };
+  }
+  try {
+    await moveToTrash(account, "inbox", targets);
+  } catch (e) {
+    return { ok: false, message: e instanceof TrashError ? e.message : describeError(e, "IMAP サーバ") };
+  }
+  refresh();
+  return { ok: true, message: `${targets.length} 通をゴミ箱へ移しました` };
 }
