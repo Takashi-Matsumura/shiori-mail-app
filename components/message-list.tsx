@@ -5,10 +5,11 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { BatchButton } from "@/components/batch-button";
 import { CategoryBadge } from "@/components/category-badge";
-import { PaperclipIcon } from "@/components/icons";
+import { CheckIcon, PaperclipIcon } from "@/components/icons";
 import { Switch } from "@/components/switch";
 import { CATEGORIES } from "@/lib/ai/prompts";
 import { useHiddenCategories } from "@/lib/client/use-hidden-categories";
+import { useStoredFlag } from "@/lib/client/use-stored-flag";
 
 type Item = {
   uid: number;
@@ -21,6 +22,8 @@ type Item = {
   threadSize: number;
   category: string | null;
   priority: string | null;
+  /** 返信済みか完了にしたもの */
+  handled: "replied" | "done" | null;
 };
 
 const PRIORITY_ORDER: Record<string, number> = { 高: 0, 中: 1, 低: 2 };
@@ -34,10 +37,12 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
   const params = useParams<{ uid?: string }>();
   const [hidden, toggleHidden] = useHiddenCategories();
   const [byPriority, setByPriority] = useState(false);
+  const [hideHandled, setHideHandled] = useStoredFlag("hide-handled", false);
   const classified = items.some((i) => i.category);
 
   // 隠すのは仕分け済みのものだけ。まだ仕分けていないメールは必ず見せる
   let shown = items.filter((i) => !i.category || !hidden.has(i.category));
+  if (hideHandled) shown = shown.filter((i) => !i.handled);
   const hiddenCount = items.length - shown.length;
   if (byPriority) {
     // 元の新着順を保ったまま、優先度で安定ソートする
@@ -64,6 +69,15 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
             <div className="text-xs text-muted">
               <Switch label="優先度の高い順に並べる" checked={byPriority} onChange={setByPriority} />
             </div>
+          </div>
+        ) : null}
+        {mailbox === "inbox" ? (
+          <div className="text-xs text-muted">
+            <Switch
+              label={`返信済み・完了を隠す(${items.filter((i) => i.handled).length} 通)`}
+              checked={hideHandled}
+              onChange={setHideHandled}
+            />
           </div>
         ) : null}
       </header>
@@ -102,6 +116,15 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
                     <span className="shrink-0 text-muted [&_svg]:size-3.5" title="添付あり">
                       <PaperclipIcon />
                       <span className="sr-only">添付あり</span>
+                    </span>
+                  ) : null}
+                  {m.handled ? (
+                    <span
+                      className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-line px-1.5 text-[11px] text-muted [&_svg]:size-3"
+                      title={m.handled === "done" ? "完了にしたメール" : "このメールの後に返信を送っています"}
+                    >
+                      <CheckIcon />
+                      {m.handled === "done" ? "完了" : "返信済み"}
                     </span>
                   ) : null}
                   {m.category ? <CategoryBadge category={m.category} priority={m.priority} /> : null}
