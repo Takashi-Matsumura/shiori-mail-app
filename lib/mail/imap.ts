@@ -203,3 +203,33 @@ export async function appendToSent(account: Account, raw: Buffer): Promise<void>
     await client.append(path, raw, ["\\Seen"]);
   });
 }
+
+/** そのまま画面に出してよい、削除を止めた理由 */
+export class TrashError extends Error {}
+
+/**
+ * メールをサーバのゴミ箱(\Trash)へ移し、手元の控えも消す。完全には消さないので、ゴミ箱から戻せる。
+ * ゴミ箱が見つからないときは、取り返しのつかない削除(EXPUNGE)はせずに止める。
+ */
+export async function moveToTrash(account: Account, slug: MailboxSlug, uids: number[]): Promise<void> {
+  if (account.readOnly) throw new TrashError("読み取り専用モードではメールを削除しません");
+  if (uids.length === 0) return;
+  await withImap(account, async (client) => {
+    const trash = (await client.list()).find((b) => b.specialUse === "\\Trash");
+    if (!trash) throw new TrashError("サーバにゴミ箱のフォルダが見つからないので、削除を止めました。");
+    // MOVE が無いと imapflow は「コピー → \Deleted → EXPUNGE」で代用する。そのとき UIDPLUS も無いと、
+    // 指定外のメール(別のメーラーで \Deleted を付けたもの)まで EXPUNGE で完全に消えるので、移さずに止める
+    if (!client.capabilities.has("MOVE") && !client.capabilities.has("UIDPLUS")) {
+      throw new TrashError("このメールサーバは、指定したメールだけを移す仕組み(MOVE / UIDPLUS)に対応していないので、削除を止めました。");
+    }
+    const lock = await client.getMailboxLock(await resolvePath(client, account, slug));
+    try {
+      const moved = await client.messageMove(uids, trash.path, { uid: true });
+      if (!moved) throw new TrashError("ゴミ箱へ移せませんでした。");
+    } finally {
+      lock.release();
+    }
+  });
+  const remove = getDb().prepare("DELETE FROM messages WHERE account = ? AND mailbox = ? AND uid = ?");
+  for (const uid of uids) remove.run(account.id, slug, uid);
+}
