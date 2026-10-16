@@ -77,17 +77,24 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
         ) : null}
         {shown.map((m) => {
           const selected = params.uid === String(m.uid);
+          // 返信も完了もしていない受信メール。既読・未読よりも目に入るよう、行の左端に縦の帯を付ける
+          const pending = mailbox === "inbox" && !m.handled;
           return (
             <li key={m.uid}>
               <Link
                 href={`/mail/${mailbox}/${m.uid}`}
                 aria-current={selected ? "true" : undefined}
-                className={`relative flex flex-col gap-0.5 rounded-xl border py-2.5 pl-5 pr-3 transition-colors ${
+                className={`relative flex flex-col gap-0.5 rounded-xl border py-2.5 pl-7 pr-3 transition-colors ${
                   selected ? "border-accent bg-accent-soft" : "border-transparent hover:border-line hover:bg-background"
                 }`}
               >
+                {pending ? (
+                  <span className="absolute inset-y-2.5 left-1.5 w-1 rounded-full bg-accent" title="未対応(返信も完了もしていない)">
+                    <span className="sr-only">未対応</span>
+                  </span>
+                ) : null}
                 {!m.seen ? (
-                  <span className="absolute left-2 top-[1.05rem] size-2 rounded-full bg-accent" aria-label="未読" />
+                  <span className="absolute left-[0.95rem] top-[1.05rem] size-2 rounded-full bg-accent" aria-label="未読" />
                 ) : null}
                 <div className="flex items-baseline gap-2">
                   <span className={`min-w-0 flex-1 truncate ${m.seen ? "text-muted" : "font-semibold"}`}>{m.who}</span>
