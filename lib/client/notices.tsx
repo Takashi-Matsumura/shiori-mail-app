@@ -11,7 +11,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 export type NoticeKind = "info" | "error" | "progress";
 export type Notice = { source: string; kind: NoticeKind; text: string };
 
-const INFO_MS = 6_000;
+/** info のお知らせを出しておく時間。画面の中の小さな結果表示(ゴミ箱へ移した通数など)もこれに合わせる */
+export const INFO_MS = 6_000;
 
 type Api = {
   notices: Notice[];

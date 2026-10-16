@@ -1,9 +1,10 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { trashMessagesAction } from "@/app/actions";
+import { INFO_MS } from "@/lib/client/notices";
 import { TrashIcon } from "@/components/icons";
 import { InfoDialog } from "@/components/info-button";
 import { escapeMarkdown } from "@/components/markdown";
@@ -25,6 +26,13 @@ export function TrashShown({ items, filtered }: { items: { uid: number; category
   const confirming = confirmedFor === signature;
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // うまくいった知らせは、ヘッダーのお知らせ(info)と同じく一定時間で消す。失敗は、次に操作するまで残す
+  useEffect(() => {
+    if (!message?.ok) return;
+    const timer = setTimeout(() => setMessage(null), INFO_MS);
+    return () => clearTimeout(timer);
+  }, [message]);
 
   // 内訳。仕分け前のメールが混ざっていたら気づけるよう、それも数えて見せる
   const breakdown = new Map<string, number>();
