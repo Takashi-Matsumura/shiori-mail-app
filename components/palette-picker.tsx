@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { DisclosureButton } from "@/components/disclosure-button";
 import { InfoButton } from "@/components/info-button";
+import { HELP } from "@/lib/help-texts";
 import { usePalette } from "@/lib/client/use-palette";
 import { PALETTES } from "@/lib/palette";
 
@@ -19,10 +20,7 @@ export function PalettePicker() {
     <fieldset className="flex flex-col gap-2 rounded-lg border border-line bg-panel p-5">
       <legend className="flex items-center gap-1 px-1 font-semibold">
         テーマカラー
-        <InfoButton title="テーマカラー">
-          <p>選ぶとすぐに切り替わります。</p>
-          <p>配色はこのブラウザに保存するので、別の端末やブラウザでは選び直してください。</p>
-        </InfoButton>
+        <InfoButton title="テーマカラー" markdown={HELP.palette} />
       </legend>
       <div className="flex items-center justify-between gap-3">
         <p className="flex min-w-0 items-center gap-2 text-xs text-muted">
