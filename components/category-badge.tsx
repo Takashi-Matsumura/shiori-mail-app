@@ -5,6 +5,7 @@ const STYLES: Record<string, string> = {
   予定: "[--tint:#2f9e6a] [--ink:#065f46] dark:[--ink:#a7f3d0]",
   "請求・手続き": "[--tint:#e3a21a] [--ink:#78350f] dark:[--ink:#fde68a]",
   宣伝: "[--tint:#9a948c] [--ink:#44403c] dark:[--ink:#d6d3d1]",
+  迷惑: "[--tint:#8a5cc7] [--ink:#4c1d95] dark:[--ink:#ddd6fe]",
 };
 
 export function CategoryBadge({ category, priority }: { category: string; priority?: string | null }) {
