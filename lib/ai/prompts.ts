@@ -1,6 +1,6 @@
 import type { ChatMessage } from "@/lib/ai/client";
 
-export const CATEGORIES = ["要返信", "情報共有", "予定", "請求・手続き", "宣伝"] as const;
+export const CATEGORIES = ["要返信", "情報共有", "予定", "請求・手続き", "宣伝", "迷惑"] as const;
 export const PRIORITIES = ["高", "中", "低"] as const;
 export const ITEM_TYPES = ["予定", "締切", "やること"] as const;
 export const TONES = ["丁寧", "簡潔", "カジュアル"] as const;
@@ -127,7 +127,9 @@ export function classifyPrompt(m: MailForPrompt): ChatMessage[] {
     {
       role: "user",
       content: `次のメールを受信者の立場で仕分けて、JSON だけを出力してください。
-category: 「要返信」(受信者の返事や作業を求めている) / 「情報共有」(読むだけでよい) / 「予定」(日時の決まった予定や予約の通知) / 「請求・手続き」(支払い・更新・申請) / 「宣伝」(広告・メルマガ・不審な勧誘)
+category: 「要返信」(受信者の返事や作業を求めている) / 「情報共有」(読むだけでよい) / 「予定」(日時の決まった予定や予約の通知) / 「請求・手続き」(支払い・更新・申請) / 「宣伝」(利用しているサービスや店からの広告・メルマガ) / 「迷惑」(心当たりのない勧誘・スパム、詐欺やフィッシングの疑い)
+「迷惑」の目安: 差出人のアドレスが名乗っている会社と合わない、受信者の名前を書かずに不安や得を強調して急がせる、リンクからログインや支払い情報の入力を求める。
+正規のサービスからのログイン通知やセキュリティの通知は「迷惑」にしない。
 priority: 「高」(数日以内に対応が必要) / 「中」 / 「低」
 reason: 判断理由を 30 字以内で
 
