@@ -1,18 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useId, useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { clearClassificationLabelAction, labelClassificationAction } from "@/app/actions";
 import { AiMeta } from "@/components/ai-meta";
 import { CategoryBadge } from "@/components/category-badge";
-import { SparkleIcon } from "@/components/icons";
 import { CATEGORIES, PRIORITIES, type Classification, type ExtractedItem } from "@/lib/ai/prompts";
 import { useAiStream, type StreamMeta } from "@/lib/client/use-ai-stream";
-import { useStoredFlag } from "@/lib/client/use-stored-flag";
 
 type Saved<T> = (T & { meta: StreamMeta }) | null;
 
-type Props = {
+export type AiPanelProps = {
   messageId: number;
   threadSize: number;
   summary: Saved<{ text: string }>;
@@ -23,89 +21,54 @@ type Props = {
   extraction: Saved<{ items: ExtractedItem[] }>;
 };
 
-export function AiPanel({ messageId, threadSize, summary, threadSummary, classification, classificationLabeled, extraction }: Props) {
-  const id = useId();
-  // 既定は畳んだ状態。開閉はブラウザに保存し、どのメールでも同じ状態にする
-  const [collapsed, setCollapsed] = useStoredFlag("ai-panel:collapsed", true);
-  const digest = [
-    extraction ? `予定・締切 ${extraction.items.length} 件` : null,
-    summary ? "要約あり" : null,
-    threadSummary ? "スレッド要約あり" : null,
-  ].filter(Boolean);
+/** 栞のアシストの中身(要約・仕分け・予定の抜き出し)。メールの上部の「栞のアシスト」ボタンから開くパネルに出す */
+export function AiPanel({ messageId, threadSize, summary, threadSummary, classification, classificationLabeled, extraction }: AiPanelProps) {
   return (
-    <section className="flex flex-col rounded-xl border border-line bg-panel">
-      <h2>
-        <button
-          type="button"
-          onClick={() => setCollapsed(!collapsed)}
-          aria-expanded={!collapsed}
-          aria-controls={id}
-          className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-xl px-3.5 py-3 text-left hover:bg-background"
-        >
-          <span aria-hidden="true" className="w-3 text-xs text-muted">
-            {collapsed ? "▸" : "▾"}
-          </span>
-          <span className="flex items-center gap-1.5 font-medium text-accent [&_svg]:size-4">
-            <SparkleIcon />
-            栞のアシスト
-          </span>
-          {collapsed ? (
-            <>
-              {classification?.value ? (
-                <CategoryBadge category={classification.value.category} priority={classification.value.priority} />
-              ) : null}
-              <span className="text-xs text-muted">{digest.length > 0 ? digest.join(" ・ ") : classification?.value ? "" : "まだ処理していません"}</span>
-            </>
-          ) : (
-            <span className="text-xs text-muted">結果は参考情報です。本文で確かめてください。</span>
-          )}
-        </button>
-      </h2>
-      <div id={id} hidden={collapsed} className="flex flex-col gap-3 px-3.5 pb-3.5">
-        <StreamedText title="要約" url="/api/ai/summarize" body={{ id: messageId, scope: "message" }} saved={summary} />
-        {threadSize > 1 ? (
-          <StreamedText
-            title={`スレッド要約(${threadSize} 通)`}
-            url="/api/ai/summarize"
-            body={{ id: messageId, scope: "thread" }}
-            saved={threadSummary}
-          />
-        ) : null}
-        <JsonTask
-          title="仕分け"
-          kind="classify"
+    <>
+      <p className="text-xs text-muted">結果は参考情報です。本文で確かめてください。</p>
+      <StreamedText title="要約" url="/api/ai/summarize" body={{ id: messageId, scope: "message" }} saved={summary} />
+      {threadSize > 1 ? (
+        <StreamedText
+          title={`スレッド要約(${threadSize} 通)`}
+          url="/api/ai/summarize"
+          body={{ id: messageId, scope: "thread" }}
+          saved={threadSummary}
+        />
+      ) : null}
+      <JsonTask
+        title="仕分け"
+        kind="classify"
+        messageId={messageId}
+        // 確定した仕分けは AI に上書きさせないので、やり直しのボタンも出さない
+        meta={classificationLabeled ? null : (classification?.meta ?? null)}
+        locked={classificationLabeled}
+      >
+        <ClassificationEditor
+          key={`${classification?.value?.category}-${classification?.value?.priority}-${classificationLabeled}`}
           messageId={messageId}
-          // 確定した仕分けは AI に上書きさせないので、やり直しのボタンも出さない
-          meta={classificationLabeled ? null : (classification?.meta ?? null)}
-          locked={classificationLabeled}
-        >
-          <ClassificationEditor
-            key={`${classification?.value?.category}-${classification?.value?.priority}-${classificationLabeled}`}
-            messageId={messageId}
-            value={classification?.value ?? null}
-            labeled={classificationLabeled}
-          />
-        </JsonTask>
-        <JsonTask title="予定・締切・やること" kind="extract" messageId={messageId} meta={extraction?.meta ?? null}>
-          {extraction ? (
-            extraction.items.length === 0 ? (
-              <p className="text-muted">該当する項目はありませんでした。</p>
-            ) : (
-              <ul className="flex flex-col gap-1">
-                {extraction.items.map((item, i) => (
-                  <li key={i} className="flex flex-wrap items-baseline gap-2">
-                    <span className="rounded-full border border-line px-2 text-[11px]">{item.type}</span>
-                    <span className="font-medium">{item.title}</span>
-                    <span className="tabular-nums">{[item.date, item.time].filter(Boolean).join(" ")}</span>
-                    <span className="text-muted">{item.detail}</span>
-                  </li>
-                ))}
-              </ul>
-            )
-          ) : null}
-        </JsonTask>
-      </div>
-    </section>
+          value={classification?.value ?? null}
+          labeled={classificationLabeled}
+        />
+      </JsonTask>
+      <JsonTask title="予定・締切・やること" kind="extract" messageId={messageId} meta={extraction?.meta ?? null}>
+        {extraction ? (
+          extraction.items.length === 0 ? (
+            <p className="text-muted">該当する項目はありませんでした。</p>
+          ) : (
+            <ul className="flex flex-col gap-1">
+              {extraction.items.map((item, i) => (
+                <li key={i} className="flex flex-wrap items-baseline gap-2">
+                  <span className="rounded-full border border-line px-2 text-[11px]">{item.type}</span>
+                  <span className="font-medium">{item.title}</span>
+                  <span className="tabular-nums">{[item.date, item.time].filter(Boolean).join(" ")}</span>
+                  <span className="text-muted">{item.detail}</span>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : null}
+      </JsonTask>
+    </>
   );
 }
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { AiPanel } from "@/components/ai-panel";
+import { AssistButton } from "@/components/assist-button";
 import { aquaClass } from "@/components/aqua-button";
 import { DoneButton } from "@/components/done-button";
 import { TrashOneButton } from "@/components/trash-one-button";
@@ -57,6 +57,16 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
         <div className="flex items-start justify-between gap-4">
           <h1 className="min-w-0 pt-2 text-xl font-semibold break-words">{message.subject || "(件名なし)"}</h1>
           <MarkSeen key={message.id} mailbox={box.slug} uid={message.uid} seen={message.seen === 1} />
+          <AssistButton
+            key={`ai-${message.id}`}
+            messageId={message.id}
+            threadSize={thread.length}
+            summary={ai.summary ? { text: ai.summary.result, meta: meta(ai.summary)! } : null}
+            threadSummary={ai.thread_summary ? { text: ai.thread_summary.result, meta: meta(ai.thread_summary)! } : null}
+            classification={ai.classify ? { value: parseResult<Classification>(ai.classify), meta: meta(ai.classify)! } : null}
+            classificationLabeled={ai.classify?.model === USER_LABEL_MODEL}
+            extraction={ai.extract ? { items: parseResult<{ items: ExtractedItem[] }>(ai.extract)?.items ?? [], meta: meta(ai.extract)! } : null}
+          />
           {box.slug === "inbox" ? (
             <>
               <TrashOneButton key={`trash-${message.id}`} uid={message.uid} />
@@ -87,16 +97,6 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
         </dl>
       </header>
 
-      <AiPanel
-        key={`ai-${message.id}`}
-        messageId={message.id}
-        threadSize={thread.length}
-        summary={ai.summary ? { text: ai.summary.result, meta: meta(ai.summary)! } : null}
-        threadSummary={ai.thread_summary ? { text: ai.thread_summary.result, meta: meta(ai.thread_summary)! } : null}
-        classification={ai.classify ? { value: parseResult<Classification>(ai.classify), meta: meta(ai.classify)! } : null}
-        classificationLabeled={ai.classify?.model === USER_LABEL_MODEL}
-        extraction={ai.extract ? { items: parseResult<{ items: ExtractedItem[] }>(ai.extract)?.items ?? [], meta: meta(ai.extract)! } : null}
-      />
 
       <MessageBody
         key={`body-${message.id}`}
