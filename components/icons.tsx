@@ -127,15 +127,6 @@ export const PriorityIcon = () => (
   </Icon>
 );
 
-/** 返信済み・完了を隠す: 丸のチェックに斜線 */
-export const HideDoneIcon = () => (
-  <Icon>
-    <circle cx="12" cy="12" r="8.5" />
-    <path d="m8.5 12.3 2.4 2.4 4.6-4.9" />
-    <path d="M4.5 4.5l15 15" />
-  </Icon>
-);
-
 /** ゴミ箱 */
 export const TrashIcon = () => (
   <Icon>
