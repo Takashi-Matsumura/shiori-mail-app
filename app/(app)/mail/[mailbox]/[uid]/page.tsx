@@ -73,11 +73,17 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
               <DoneButton key={`done-${message.id}`} messageId={message.id} done={handled.done} replied={handled.replied} />
             </>
           ) : null}
-          <Link href={`/compose?reply=${message.id}`} aria-label="返信" title="返信" className={aquaClass("solid", "md")}>
-            <span className="flex items-center justify-center">
-              <ReplyIcon />
+          <div className="flex shrink-0 flex-col items-center gap-1">
+            <Link href={`/compose?reply=${message.id}`} aria-label="返信" title="返信" className={aquaClass("solid", "md")}>
+              <span className="flex items-center justify-center">
+                <ReplyIcon />
+              </span>
+            </Link>
+            {/* ほかのボタンと同じく、下に名前を出す(読み上げは aria-label で伝わるので、こちらは読ませない) */}
+            <span aria-hidden="true" className="text-[11px] text-muted">
+              返信
             </span>
-          </Link>
+          </div>
         </div>
         <dl className="grid grid-cols-[4rem_1fr] gap-x-2 gap-y-1 rounded-xl border border-line bg-panel px-3.5 py-3 text-muted">
           <dt>差出人</dt>
