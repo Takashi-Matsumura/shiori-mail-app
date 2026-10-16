@@ -5,7 +5,8 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { BatchButton } from "@/components/batch-button";
 import { CategoryBadge } from "@/components/category-badge";
-import { CheckIcon, HideDoneIcon, PaperclipIcon, PriorityIcon } from "@/components/icons";
+import { CheckIcon, PaperclipIcon, PriorityIcon } from "@/components/icons";
+import { Switch } from "@/components/switch";
 import { TrashShown } from "@/components/trash-shown";
 import { CATEGORIES } from "@/lib/ai/prompts";
 import { useHiddenCategories } from "@/lib/client/use-hidden-categories";
@@ -37,6 +38,7 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
   const params = useParams<{ uid?: string }>();
   const [hidden, toggleHidden] = useHiddenCategories();
   const [byPriority, setByPriority] = useState(false);
+  // 「未対応のみ」。保存先の名前は、フッターの「返信済み・完了を隠す」だったころのまま(切り替えた状態を引き継ぐ)
   const [hideHandled, setHideHandled] = useStoredFlag("hide-handled", false);
   const classified = items.some((i) => i.category);
 
@@ -52,10 +54,22 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
   return (
     <div className="flex w-96 shrink-0 flex-col border-r border-line bg-panel">
       <header className="flex flex-col gap-3 border-b border-line px-3.5 pb-3 pt-4">
-        <h1 className="text-lg font-semibold">
-          {title} <span className="text-xs font-normal text-muted">{items.length} 通</span>
-          {hiddenCount > 0 ? <span className="ml-1 text-xs font-normal text-muted">(うち {hiddenCount} 通を非表示)</span> : null}
-        </h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="min-w-0 text-lg font-semibold">
+            {title} <span className="text-xs font-normal text-muted">{items.length} 通</span>
+            {hiddenCount > 0 ? <span className="ml-1 text-xs font-normal text-muted">(うち {hiddenCount} 通を非表示)</span> : null}
+          </h1>
+          {mailbox === "inbox" ? (
+            <div className="shrink-0 pt-1.5 text-xs text-muted">
+              <Switch
+                label={`未対応のみ(${items.filter((i) => !i.handled).length})`}
+                checked={hideHandled}
+                onChange={setHideHandled}
+                title="返信済み・完了にしたメールを隠し、まだ対応していないメールだけを表示します"
+              />
+            </div>
+          ) : null}
+        </div>
         {mailbox === "inbox" ? <BatchButton kind="classify" label="栞に仕分けてもらう" pending={pendingClassify} /> : null}
         {classified ? (
           <div className="flex flex-col gap-2">
@@ -132,7 +146,8 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
       </ul>
       {/*
         たまにしか使わない操作は、上のフィルタ(仕分けのボタン)と取り違えないよう、下のフッターにアイコンだけで並べる。
-        切り替え 2 つは左、取り返しのつかないゴミ箱は右端に離して置く
+        並べ替えの切り替えは左、取り返しのつかないゴミ箱は右端に離して置く
+        (「未対応のみ」は表示を絞るものなので、上の見出しの横に置く)
       */}
       {mailbox === "inbox" ? (
         <footer className="flex items-center gap-1 border-t border-line px-2 py-1.5" aria-label="一覧の操作">
@@ -141,13 +156,6 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
               <PriorityIcon />
             </ToggleIcon>
           ) : null}
-          <ToggleIcon
-            label={`返信済み・完了を隠す(${items.filter((i) => i.handled).length} 通)`}
-            pressed={hideHandled}
-            onClick={() => setHideHandled(!hideHandled)}
-          >
-            <HideDoneIcon />
-          </ToggleIcon>
           <TrashShown items={shown} filtered={hiddenCount > 0} />
         </footer>
       ) : null}
