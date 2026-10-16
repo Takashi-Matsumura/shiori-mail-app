@@ -16,8 +16,17 @@ import { trashHelp } from "@/lib/help-texts";
  * 確認中に表示が変わったら(フィルタの切り替えや新着)、ダイアログを閉じて最初からにする。
  * 一覧の下のフッターに、アイコンのボタンと結果の一文を並べて出す。
  * 何も隠していないとき(filtered が false)は押せない(絞り込まずに受信トレイを丸ごと移せないように)。
+ * 返信済み・完了にしたメール(handled)は、表示されていても移さない(サーバの trashMessagesAction も同じ決まり)。
  */
-export function TrashShown({ items, filtered }: { items: { uid: number; category: string | null }[]; filtered: boolean }) {
+export function TrashShown({
+  items: shown,
+  filtered,
+}: {
+  items: { uid: number; category: string | null; handled: string | null }[];
+  filtered: boolean;
+}) {
+  const items = shown.filter((i) => !i.handled);
+  const excluded = shown.length - items.length;
   const router = useRouter();
   const params = useParams<{ uid?: string }>();
   // ダイアログを開いたときの表示(UID の並び)。今の表示と違えば確認は取り消し扱い
@@ -52,8 +61,10 @@ export function TrashShown({ items, filtered }: { items: { uid: number; category
   const label = !filtered
     ? "ゴミ箱へ移す(仕分けを隠して絞り込むと使えます)"
     : items.length === 0
-      ? "ゴミ箱へ移す(表示中のメールがありません)"
-      : `表示中の ${items.length} 通をゴミ箱へ移す…`;
+      ? excluded > 0
+        ? "ゴミ箱へ移す(表示中のメールは、すべて返信済み・完了です)"
+        : "ゴミ箱へ移す(表示中のメールがありません)"
+      : `表示中の ${items.length} 通をゴミ箱へ移す…${excluded > 0 ? `(返信済み・完了の ${excluded} 通は除く)` : ""}`;
 
   return (
     <>
@@ -78,7 +89,7 @@ export function TrashShown({ items, filtered }: { items: { uid: number; category
             <InfoDialog
               title={`${items.length} 通をゴミ箱へ移しますか？`}
               // 仕分けの名前は AI の出力なので、マークダウンの記号として解釈されないようにして埋め込む
-              markdown={trashHelp(items.length, [...breakdown].map(([c, n]) => `${escapeMarkdown(c)} ${n}`).join("・"))}
+              markdown={trashHelp(items.length, [...breakdown].map(([c, n]) => `${escapeMarkdown(c)} ${n}`).join("・"), excluded)}
               // 移している最中に閉じても、移す処理は止まらない(結果は一覧の上に出る)
               onClose={() => setConfirmedFor(null)}
             >

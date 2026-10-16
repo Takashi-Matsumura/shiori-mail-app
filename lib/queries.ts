@@ -117,6 +117,14 @@ export async function getThread(account: string, threadKey: string | null): Prom
     .all(account, threadKey) as MessageRow[];
 }
 
+/** uids のうち、返信済みか完了にしたもの(対応済み)の UID。まとめてゴミ箱へ移すときに、これらを外すのに使う */
+export function findHandledUids(account: string, mailbox: MailboxSlug, uids: number[]): Set<number> {
+  const stmt = getDb().prepare(
+    `SELECT (${REPLIED_SQL}) OR (${DONE_SQL}) AS handled FROM messages m WHERE m.account = ? AND m.mailbox = ? AND m.uid = ?`,
+  );
+  return new Set(uids.filter((uid) => (stmt.get(account, mailbox, uid) as { handled: number } | undefined)?.handled === 1));
+}
+
 export async function getHandled(messageId: number): Promise<{ replied: boolean; done: boolean }> {
   await io();
   const row = getDb()

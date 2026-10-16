@@ -136,12 +136,17 @@ ${STATUS_HELP}
 > 栞は日付を読み違えることがあります。大事な予定は、元のメールで確かめてください。`,
 } as const;
 
-/** ゴミ箱へ移す前の確認。breakdown は「宣伝 42・仕分け前 1」のような内訳(マークダウンとして安全な文字列) */
-export function trashHelp(count: number, breakdown: string): string {
+/**
+ * ゴミ箱へ移す前の確認。breakdown は「宣伝 42・仕分け前 1」のような内訳(マークダウンとして安全な文字列)。
+ * excluded は、表示されているが返信済み・完了なので移さない通数
+ */
+export function trashHelp(count: number, breakdown: string, excluded: number): string {
   return `いま一覧に表示している **${count} 通**を、メールサーバのゴミ箱へ移します。
 
 内訳: ${breakdown}
-
+${excluded > 0 ? `
+> 表示中のうち、**返信済み・完了の ${excluded} 通は移しません**。1 通ずつなら、メールを開いて「ゴミ箱へ」で移せます。
+` : ""}
 ### 移したメールはどうなるか
 - 移す先は**メールサーバ(Gmail など)のゴミ箱**です。このアプリが完全に削除するわけではありません
 - ゴミ箱に残る期間は、メールサービスによって違います。Gmail では **30 日**たつと自動で完全に削除されます
