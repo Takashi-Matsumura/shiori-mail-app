@@ -4,6 +4,7 @@ import { AquaButton } from "@/components/aqua-button";
 import { BatchButton } from "@/components/batch-button";
 import { SearchIcon, SparkleIcon } from "@/components/icons";
 import { InfoButton } from "@/components/info-button";
+import { HELP } from "@/lib/help-texts";
 import { requireAccount } from "@/lib/accounts";
 import { AiError } from "@/lib/ai/client";
 import { semanticSearch } from "@/lib/ai/ops";
@@ -16,13 +17,7 @@ export default function SearchPage({ searchParams }: PageProps<"/search">) {
       <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
         <h1 className="flex items-center gap-1.5 text-xl font-semibold">
           検索
-          <InfoButton title="検索">
-            <p>
-              同じ言葉で 2 通りに探して、結果を並べます。キーワード検索は「その文字を含むか」、意味検索は
-              「文章を数百個の数値(埋め込みベクトル)にして、向きが近いか」で探します。
-            </p>
-            <p>意味検索を使うには、先に「メールを索引に入れる」でメールを埋め込みベクトルにしておく必要があります。</p>
-          </InfoButton>
+          <InfoButton title="検索" markdown={HELP.search} />
         </h1>
         <Suspense fallback={<p className="text-muted">読み込み中…</p>}>
           <Search searchParams={searchParams} />

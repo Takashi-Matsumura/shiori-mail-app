@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { BatchButton } from "@/components/batch-button";
 import { InfoButton } from "@/components/info-button";
+import { HELP } from "@/lib/help-texts";
 import { TaskViews } from "@/components/task-views";
 import { requireAccount } from "@/lib/accounts";
 import { listTasks } from "@/lib/queries";
@@ -11,10 +12,7 @@ export default function TasksPage() {
       <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
         <h1 className="flex items-center gap-1.5 text-xl font-semibold">
           予定・やること
-          <InfoButton title="予定・やること">
-            <p>受信トレイのメールから、栞が日時のある予定・締切・依頼を抜き出した一覧です。日付の早い順に並べ、日付のないものは最後に置きます。</p>
-            <p>日付の読み違いが起こりうるので、元のメールで確かめてください。</p>
-          </InfoButton>
+          <InfoButton title="予定・やること" markdown={HELP.tasks} />
         </h1>
         <Suspense fallback={<p className="text-muted">読み込み中…</p>}>
           <Tasks />

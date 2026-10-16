@@ -4,6 +4,7 @@ import { startTransition, useActionState, useEffect, useId, useRef, useState } f
 import { saveSettingsAction, testRealAccountAction, type ActionState } from "@/app/actions";
 import { DisclosureButton } from "@/components/disclosure-button";
 import { InfoButton } from "@/components/info-button";
+import { HELP } from "@/lib/help-texts";
 
 type AccountInfo = { email: string; servers: string };
 
@@ -147,7 +148,7 @@ export function SettingsForm({
           </div>
           <Field
             label="ログイン名"
-            info={<p>メールアドレスとは別のログイン名を使うサービスのときだけ入力します。空欄なら、メールアドレスでログインします。</p>}
+            info={HELP.loginName}
             name="realUser"
             defaultValue={rf.user}
             placeholder="空欄ならメールアドレスを使います"
@@ -160,13 +161,7 @@ export function SettingsForm({
             autoComplete="new-password"
             disabled={!keychainAvailable}
             placeholder={passwordSource === "none" ? "アプリ用パスワード" : "保存済み(変えるときだけ入力)"}
-            info={
-              <>
-                <p>パスワードは macOS のキーチェーンにだけ保存し、データベースや画面には残しません。</p>
-                <p>多くのサービスでは、通常のパスワードではなく「アプリ用パスワード」の発行が必要です。</p>
-                <p>接続先かログイン名を変えるときは、パスワードも入れ直してください。入れ直すまで、設定は保存されません。</p>
-              </>
-            }
+            info={HELP.password}
             // いまパスワードがどこにあるかは状態なので、説明とは分けて常に見せる
             note={
               !keychainAvailable
@@ -217,34 +212,28 @@ export function SettingsForm({
               name="realImapHost"
               defaultValue={rf.imapHost}
               placeholder="imap.example.com"
-              info={<p>メールを受け取る IMAP サーバのホスト名です。http:// などは付けずに入力します。</p>}
+              info={HELP.imapHost}
             />
-            <Field label="ポート" name="realImapPort" defaultValue={String(rf.imapPort)} inputMode="numeric" info={PORT_INFO} />
+            <Field label="ポート" name="realImapPort" defaultValue={String(rf.imapPort)} inputMode="numeric" info={HELP.port} />
             <Field
               label="送信サーバ"
               name="realSmtpHost"
               defaultValue={rf.smtpHost}
               placeholder="smtp.example.com"
-              info={<p>メールを送る SMTP サーバのホスト名です。http:// などは付けずに入力します。</p>}
+              info={HELP.smtpHost}
             />
-            <Field label="ポート" name="realSmtpPort" defaultValue={String(rf.smtpPort)} inputMode="numeric" info={PORT_INFO} />
+            <Field label="ポート" name="realSmtpPort" defaultValue={String(rf.smtpPort)} inputMode="numeric" info={HELP.port} />
           </div>
           <Check
             boxed
             label="読み取り専用モード"
             name="realReadOnly"
             defaultChecked={rf.readOnly}
-            info={
-              <>
-                <p>このアプリを試すときのための設定です。</p>
-                <p>サーバのメールボックスに一切書き込みません。メールは取り込むだけでサーバに残り、既読・未読はこのアプリの中だけで記録します(ふだんのメールアプリでは未読のまま)。送信もしません。</p>
-                <p>外すと、アプリの中だけの既読・未読はその場で捨て、次の同期でサーバの状態に戻ります。</p>
-              </>
-            }
+            info={HELP.readOnly}
           />
           <Field
             label="送信済みフォルダ名"
-            info={<p>入力は任意です。空欄なら、サーバが「送信済み」として示しているフォルダを探して使います。</p>}
+            info={HELP.sentMailbox}
             name="realSentMailbox"
             defaultValue={rf.sentMailbox}
             placeholder="空欄ならサーバの「送信済み」属性から探します"
@@ -253,7 +242,7 @@ export function SettingsForm({
             label="送信したメールの控えを送信済みフォルダに保存する"
             name="realAppendSent"
             defaultChecked={rf.appendSent}
-            info={<p>Gmail はサーバが自動で保存するので、外さないと控えが二重になります。</p>}
+            info={HELP.saveSentCopy}
           />
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-1">
@@ -269,9 +258,7 @@ export function SettingsForm({
               >
                 {testing ? "確かめています…" : "接続を確かめる"}
               </button>
-              <InfoButton title="接続を確かめる">
-                <p>入力した内容で IMAP と SMTP にログインできるかを試します。メールは送りません。</p>
-              </InfoButton>
+              <InfoButton title="接続を確かめる" markdown={HELP.testConnection} />
             </div>
             {test ? (
               <p role="status" className={`whitespace-pre-line ${test.ok ? "text-muted" : "text-red-600"}`}>
@@ -313,18 +300,7 @@ export function SettingsForm({
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
             placeholder={defaultBaseUrl}
-            info={
-              <>
-                <p>要約や仕分けに使う、ローカルの AI サーバの URL です。OpenAI 互換 API のベース URL を指定します。よく使うサーバの既定の URL は次のとおりです。</p>
-                <ul className="list-disc pl-5 font-mono text-xs">
-                  <li>llama-server: http://localhost:8080/v1</li>
-                  <li>LM Studio: http://localhost:1234/v1</li>
-                  <li>Ollama: http://localhost:11434/v1</li>
-                </ul>
-                <p>URL を変えると、モデル一覧も更新されます。</p>
-                <StatusHelp />
-              </>
-            }
+            info={HELP.aiBaseUrl}
           />
           <Field
             label="埋め込み用サーバの URL"
@@ -335,71 +311,39 @@ export function SettingsForm({
             value={embedBaseUrl}
             onChange={(e) => setEmbedBaseUrl(e.target.value)}
             placeholder="空欄なら上と同じサーバ"
-            info={
-              <>
-                <p>空欄なら、上の AI サーバをそのまま使います。</p>
-                <p>llama-server はモデルごとにサーバが分かれるので、埋め込みモデルのサーバを別に指定します(例: http://localhost:8082/v1)。</p>
-                <StatusHelp />
-                <p>空欄のときは上の AI サーバを使うので、この欄には印を出しません。</p>
-              </>
-            }
+            info={HELP.aiEmbedBaseUrl}
           />
           <ModelField
             name="aiChatModel"
             label="会話用モデル"
             value={ai.chatModel}
             options={chatModels}
-            info={<p>要約・返信の下書き・仕分け・予定の抜き出しに使うモデルです。「自動」なら、一覧の先頭のモデルを使います。</p>}
+            info={HELP.chatModel}
           />
           <Check
             label="回答の前にモデルに考えさせる"
             name="aiThinking"
             defaultChecked={ai.thinking}
-            info={
-              <p>
-                「思考モード」と呼ばれる機能で、対応しているモデルでだけ働きます。判断は丁寧になりますが、1 通あたりの待ち時間が数倍〜数十倍に延びます。速さと質の違いを比べる実験用です。
-              </p>
-            }
+            info={HELP.thinking}
           />
           <Check
             label="仕分けは、まず似たメールの仕分けから推定する"
             name="aiClassifyKnn"
             defaultChecked={ai.classifyKnn}
-            info={
-              <>
-                <p>
-                  「近傍法」と呼ばれる方法です。検索用の埋め込みを使い、1 通あたり数ミリ秒で仕分けます。似たメールの仕分けが割れているときや、見たことのない種類のメールだけ、会話用モデルに聞きます。
-                </p>
-                <p>
-                  手本になるのは会話用モデルの判定と、あなたが確定した仕分けです(仕分け済みが 20 通に満たないうちは、すべて会話用モデルに聞きます)。
-                </p>
-              </>
-            }
+            info={HELP.classifyKnn}
           />
           <ModelField
             name="aiEmbedModel"
             label="埋め込み用モデル"
             value={ai.embedModel}
             options={embedModels}
-            info={
-              <>
-                <p>意味検索(言葉が違っても内容の近いメールを探す検索)と、近傍法の仕分けに使うモデルです。</p>
-                <p>埋め込み用モデルを変えたら、検索画面で索引を作り直す必要があります(モデルが違うベクトル同士は比べられません)。</p>
-              </>
-            }
+            info={HELP.embedModel}
           />
         </div>
       </fieldset>
     </form>
   );
 }
-
-const PORT_INFO = (
-  <p>
-    IMAP 993・SMTP 465 は最初から暗号化して接続します。それ以外のポート(SMTP 587 など)では STARTTLS
-    を必須にし、暗号化できなければパスワードを送らずに止めます。
-  </p>
-);
 
 /** 項目名と、説明があればその ⓘ。ⓘ は <label> の外に置く(中に置くと、項目名を押したときの動きが変わる) */
 function FieldLabel({
@@ -410,35 +354,15 @@ function FieldLabel({
 }: {
   htmlFor: string;
   label: string;
-  info?: React.ReactNode;
+  info?: string;
   status?: React.ReactNode;
 }) {
   return (
     <span className="flex items-center gap-1">
       <label htmlFor={htmlFor}>{label}</label>
-      {info ? <InfoButton title={label}>{info}</InfoButton> : null}
+      {info ? <InfoButton title={label} markdown={info} /> : null}
       {status}
     </span>
-  );
-}
-
-/** URL 欄の ⓘ で、項目名の横の印の見方を説明する */
-function StatusHelp() {
-  return (
-    <>
-      <p>項目名の横の印は、保存済みの URL に接続できたかを表します(設定画面を開いたときと、保存したときに確かめます)。</p>
-      <ul className="flex flex-col gap-1">
-        <li className="flex items-center gap-1.5">
-          <ConnectionStatus error={null} />
-          接続できています。
-        </li>
-        <li className="flex items-start gap-1.5">
-          <ConnectionStatus error="接続できません" />
-          <span>接続できません。理由は URL 欄のすぐ下に赤字で出ます。サーバが起動しているか、URL が正しいかを確かめてください。</span>
-        </li>
-      </ul>
-      <p>URL を書き換えている間は印を消し、欄を離れて保存したあとに確かめ直します。</p>
-    </>
   );
 }
 
@@ -478,7 +402,7 @@ function ModelField({
   label: string;
   value: string;
   options: string[];
-  info?: React.ReactNode;
+  info?: string;
 }) {
   const id = useId();
   // 一覧に無い設定済みの値(接続できないときなど)も選択肢に残す
@@ -506,7 +430,7 @@ function Field({
 }: {
   label: string;
   name: string;
-  info?: React.ReactNode;
+  info?: string;
   /** 項目名の横に出す状態のアイコン */
   status?: React.ReactNode;
   note?: string;
@@ -537,7 +461,7 @@ function Check({
   label: string;
   name: string;
   defaultChecked: boolean;
-  info?: React.ReactNode;
+  info?: string;
   /** 目立たせたい項目は枠で囲む */
   boxed?: boolean;
 }) {
@@ -547,7 +471,7 @@ function Check({
         <input type="checkbox" name={name} value="on" defaultChecked={defaultChecked} className="mt-1" />
         <span>{label}</span>
       </label>
-      {info ? <InfoButton title={label}>{info}</InfoButton> : null}
+      {info ? <InfoButton title={label} markdown={info} /> : null}
     </div>
   );
 }

@@ -5,6 +5,8 @@ import { useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { trashMessagesAction } from "@/app/actions";
 import { InfoDialog } from "@/components/info-button";
+import { escapeMarkdown } from "@/components/markdown";
+import { trashHelp } from "@/lib/help-texts";
 
 /**
  * 一覧に表示しているメールを、まとめてサーバのゴミ箱へ移す。
@@ -54,26 +56,12 @@ export function TrashShown({ items }: { items: { uid: number; category: string |
         ? createPortal(
             <InfoDialog
               title={`${items.length} 通をゴミ箱へ移しますか？`}
+              // 仕分けの名前は AI の出力なので、マークダウンの記号として解釈されないようにして埋め込む
+              markdown={trashHelp(items.length, [...breakdown].map(([c, n]) => `${escapeMarkdown(c)} ${n}`).join("・"))}
               // 移している最中に閉じても、移す処理は止まらない(結果は一覧の上に出る)
               onClose={() => setConfirmedFor(null)}
             >
-              <p>
-                対象は、いま一覧に表示している <strong className="tabular-nums">{items.length} 通</strong>です。
-                <span className="text-muted">({[...breakdown].map(([c, n]) => `${c} ${n}`).join("・")})</span>
-              </p>
-              <ul className="flex list-disc flex-col gap-1.5 pl-5">
-                <li>
-                  移す先は、<strong>メールサーバ(Gmail など)のゴミ箱</strong>です。このアプリが完全に削除するわけではありません。
-                </li>
-                <li>
-                  ゴミ箱はこのアプリには表示されません。戻したいときは、Gmail などの Web 画面でゴミ箱を開いて受信トレイへ移し、ここで「サーバと同期」を押してください。
-                </li>
-                <li>
-                  ゴミ箱に残る期間はメールサービスによって違います(Gmail は 30 日たつと自動で完全に削除されます)。
-                </li>
-                <li>このアプリの中の控えや仕分けの結果は消えます。戻したメールは、栞がもう一度仕分けます。</li>
-              </ul>
-              <div className="mt-2 flex justify-end gap-2">
+              <div className="mt-1 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setConfirmedFor(null)}

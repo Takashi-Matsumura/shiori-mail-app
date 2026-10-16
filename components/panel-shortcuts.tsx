@@ -13,6 +13,13 @@ const SHORTCUTS = [
   { keys: ["?"], description: "この一覧を表示する" },
 ];
 
+/** ショートカットの一覧(ダイアログの本文)。キーは `コード` で書くと、キーの形で描かれる */
+const SHORTCUTS_HELP = `| キー | 動作 |
+|---|---|
+${SHORTCUTS.map(({ keys, description }) => `| ${keys.map((k) => `\`${k}\``).join(" ")} | ${description} |`).join("\n")}
+
+文字を入力しているときは使えません。`;
+
 /**
  * 矢印キーで左右のパネル(SidePanel)を開閉する。
  * ← は左、→ は右のパネルを開閉し、↑ は両方を開き、↓ は両方を畳む。? でショートカットの一覧を出す。
@@ -59,23 +66,7 @@ export function PanelShortcuts() {
   }, [leftCollapsed, rightCollapsed, setLeftCollapsed, setRightCollapsed]);
   return helpOpen
     ? createPortal(
-        <InfoDialog title="キーボードショートカット" onClose={() => setHelpOpen(false)}>
-          <dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2">
-            {SHORTCUTS.map(({ keys, description }) => (
-              <div key={description} className="contents">
-                <dt className="flex gap-1">
-                  {keys.map((key) => (
-                    <kbd key={key} className="min-w-7 rounded border border-line bg-background px-1.5 py-0.5 text-center font-sans text-xs">
-                      {key}
-                    </kbd>
-                  ))}
-                </dt>
-                <dd>{description}</dd>
-              </div>
-            ))}
-          </dl>
-          <p className="text-xs text-muted">文字を入力しているときは使えません。</p>
-        </InfoDialog>,
+        <InfoDialog title="キーボードショートカット" markdown={SHORTCUTS_HELP} onClose={() => setHelpOpen(false)} />,
         document.body,
       )
     : null;

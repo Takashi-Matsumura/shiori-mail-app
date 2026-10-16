@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon } from "@/components/icons";
+import { Markdown } from "@/components/markdown";
 
 /**
  * 設定項目の説明を、ⓘ を押したときだけダイアログで見せる。慣れた人には説明文が多すぎるので、ふだんは畳んでおく。
+ * 説明文はマークダウンで書く(文面は lib/help-texts.ts にまとめてある)。
  * ダイアログは body 直下に出す(<label> の中に置くと、ダイアログを押したときにチェックボックスが切り替わってしまう)。
  */
-export function InfoButton({ title, children }: { title: string; children: React.ReactNode }) {
+export function InfoButton({ title, markdown }: { title: string; markdown: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -25,13 +27,26 @@ export function InfoButton({ title, children }: { title: string; children: React
           <path d="M12 7.5h.01" />
         </svg>
       </button>
-      {open ? createPortal(<InfoDialog title={title} onClose={() => setOpen(false)}>{children}</InfoDialog>, document.body) : null}
+      {open ? createPortal(<InfoDialog title={title} markdown={markdown} onClose={() => setOpen(false)} />, document.body) : null}
     </>
   );
 }
 
-/** 説明用のダイアログ。開いた状態で描かれ、閉じると onClose が呼ばれる。 */
-export function InfoDialog({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+/**
+ * 説明用のダイアログ。開いた状態で描かれ、閉じると onClose が呼ばれる。
+ * 本文は markdown で渡す。children には、本文の下に置くボタンなど(説明ではないもの)だけを渡す。
+ */
+export function InfoDialog({
+  title,
+  markdown,
+  onClose,
+  children,
+}: {
+  title: string;
+  markdown: string;
+  onClose: () => void;
+  children?: React.ReactNode;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     ref.current?.showModal();
@@ -46,7 +61,7 @@ export function InfoDialog({ title, onClose, children }: { title: string; onClos
       onClick={(e) => {
         if (e.target === e.currentTarget) e.currentTarget.close();
       }}
-      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-line bg-panel p-0 text-sm text-foreground shadow-lg backdrop:bg-black/40"
+      className="m-auto max-h-[calc(100dvh-4rem)] w-[calc(100%-2rem)] max-w-lg rounded-lg border border-line bg-panel p-0 text-sm text-foreground shadow-lg backdrop:bg-black/40"
     >
       <div className="flex flex-col gap-3 p-5">
         <div className="flex items-start justify-between gap-3">
@@ -62,7 +77,8 @@ export function InfoDialog({ title, onClose, children }: { title: string; onClos
             <CloseIcon />
           </button>
         </div>
-        <div className="flex flex-col gap-2 leading-relaxed">{children}</div>
+        <Markdown>{markdown}</Markdown>
+        {children}
       </div>
     </dialog>
   );
