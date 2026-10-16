@@ -40,6 +40,7 @@ async function ListPane({ params }: { params: Promise<{ mailbox: string }> }) {
         threadSize: m.thread_size,
         category: m.classification?.category ?? null,
         priority: m.classification?.priority ?? null,
+        handled: m.done ? "done" : m.replied ? "replied" : null,
       }))}
     />
   );

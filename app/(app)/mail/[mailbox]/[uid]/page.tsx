@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AiPanel } from "@/components/ai-panel";
 import { aquaClass } from "@/components/aqua-button";
+import { DoneButton } from "@/components/done-button";
 import { ReplyIcon } from "@/components/icons";
 import { MessageBody } from "@/components/message-body";
 import { MarkSeen } from "@/components/mark-seen";
@@ -12,7 +13,7 @@ import { bytes, fullDate } from "@/lib/format";
 import { MAILBOXES } from "@/lib/mail/imap";
 import { parseRaw } from "@/lib/mail/parse";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
-import { getAiResults, getMessage, getThread, type AiResultRow } from "@/lib/queries";
+import { getAiResults, getHandled, getMessage, getThread, type AiResultRow } from "@/lib/queries";
 
 export default function MessagePage({ params }: PageProps<"/mail/[mailbox]/[uid]">) {
   return (
@@ -42,10 +43,11 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
   const message = await getMessage(account.id, box.slug, Number(uid));
   if (!message) notFound();
 
-  const [thread, ai, parsed] = await Promise.all([
+  const [thread, ai, parsed, handled] = await Promise.all([
     getThread(account.id, message.thread_key),
     getAiResults(message.id),
     parseRaw(Buffer.from(message.raw)),
+    getHandled(message.id),
   ]);
 
   return (
@@ -54,6 +56,9 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
         <div className="flex items-start justify-between gap-4">
           <h1 className="min-w-0 pt-2 text-xl font-semibold break-words">{message.subject || "(件名なし)"}</h1>
           <MarkSeen key={message.id} mailbox={box.slug} uid={message.uid} seen={message.seen === 1} />
+          {box.slug === "inbox" ? (
+            <DoneButton key={`done-${message.id}`} messageId={message.id} done={handled.done} replied={handled.replied} />
+          ) : null}
           <Link href={`/compose?reply=${message.id}`} aria-label="返信" title="返信" className={aquaClass("solid", "md")}>
             <span className="flex items-center justify-center">
               <ReplyIcon />

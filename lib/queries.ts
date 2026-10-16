@@ -45,6 +45,10 @@ export type ListItem = {
   snippet: string;
   thread_size: number;
   classification: Classification | null;
+  /** 同じスレッドで、このメールより後に自分が送ったメールがある */
+  replied: number;
+  /** このメールか、同じスレッドでこれより後のメールを「完了」にした */
+  done: number;
 };
 
 export type AiResultRow = {
@@ -66,6 +70,12 @@ function parseJson<T>(s: string | null | undefined): T | null {
   }
 }
 
+// 対応済みかどうか。どちらも messages m の行について求める
+const REPLIED_SQL = `EXISTS (SELECT 1 FROM messages s WHERE m.thread_key IS NOT NULL AND s.account = m.account
+  AND s.thread_key = m.thread_key AND s.mailbox = 'sent' AND s.date > m.date)`;
+const DONE_SQL = `EXISTS (SELECT 1 FROM message_done d JOIN messages t ON t.id = d.message_id WHERE t.id = m.id
+  OR (m.thread_key IS NOT NULL AND t.account = m.account AND t.thread_key = m.thread_key AND t.date >= m.date))`;
+
 export async function listMessages(account: string, mailbox: MailboxSlug): Promise<ListItem[]> {
   await io();
   const rows = getDb()
@@ -73,7 +83,9 @@ export async function listMessages(account: string, mailbox: MailboxSlug): Promi
       `SELECT m.id, m.uid, m.subject, m.from_name, m.from_addr, m.to_text, m.date, m.seen, m.has_attachments,
               substr(m.text, 1, 140) AS snippet,
               (SELECT COUNT(*) FROM messages t WHERE t.account = m.account AND t.thread_key = m.thread_key) AS thread_size,
-              (SELECT result FROM ai_results a WHERE a.message_id = m.id AND a.kind = 'classify') AS classification
+              (SELECT result FROM ai_results a WHERE a.message_id = m.id AND a.kind = 'classify') AS classification,
+              ${REPLIED_SQL} AS replied,
+              ${DONE_SQL} AS done
        FROM messages m WHERE m.account = ? AND m.mailbox = ? ORDER BY m.date DESC`,
     )
     .all(account, mailbox) as (Omit<ListItem, "classification"> & { classification: string | null })[];
@@ -103,6 +115,14 @@ export async function getThread(account: string, threadKey: string | null): Prom
   return getDb()
     .prepare("SELECT * FROM messages WHERE account = ? AND thread_key = ? ORDER BY date ASC")
     .all(account, threadKey) as MessageRow[];
+}
+
+export async function getHandled(messageId: number): Promise<{ replied: boolean; done: boolean }> {
+  await io();
+  const row = getDb()
+    .prepare(`SELECT ${REPLIED_SQL} AS replied, ${DONE_SQL} AS done FROM messages m WHERE m.id = ?`)
+    .get(messageId) as { replied: number; done: number } | undefined;
+  return { replied: row?.replied === 1, done: row?.done === 1 };
 }
 
 export async function getCounts(account: string): Promise<{ unread: number; total: number }> {

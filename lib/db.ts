@@ -93,6 +93,12 @@ CREATE TABLE IF NOT EXISTS auth_challenges (
   expires INTEGER NOT NULL
 );
 
+-- あなたが「完了」にしたメール。同じスレッドでこれより前のメールも、まとめて対応済みとみなす
+CREATE TABLE IF NOT EXISTS message_done (
+  message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+  created INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL

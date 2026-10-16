@@ -282,3 +282,30 @@ export async function clearClassificationLabelAction(messageId: number): Promise
   refresh();
   return { ok: true, message: "確定を外しました" };
 }
+
+/**
+ * メールを「完了」にする/外す。サーバ(IMAP)には送らず、アプリの中だけで記録する。
+ * 外すときは、このメールを完了扱いにしている記録(同じスレッドでこれ以降のメールのもの)をまとめて消す。
+ */
+export async function setDoneAction(messageId: number, done: boolean): Promise<ActionState> {
+  await requireSession();
+  if (!Number.isInteger(messageId)) return { ok: false, message: "不正な指定です" };
+  const account = getAccount();
+  if (!account) return { ok: false, message: NO_ACCOUNT };
+  const db = getDb();
+  // ほかのアカウントのメールは触らない
+  const message = db.prepare("SELECT id, thread_key, date FROM messages WHERE id = ? AND account = ?").get(messageId, account.id) as
+    | { id: number; thread_key: string | null; date: number }
+    | undefined;
+  if (!message) return { ok: false, message: "メールが見つかりません。" };
+  if (done) {
+    db.prepare("INSERT OR IGNORE INTO message_done (message_id, created) VALUES (?, ?)").run(messageId, Date.now());
+  } else {
+    db.prepare(
+      `DELETE FROM message_done WHERE message_id = ? OR message_id IN (
+         SELECT id FROM messages WHERE ? IS NOT NULL AND account = ? AND thread_key = ? AND date >= ?)`,
+    ).run(messageId, message.thread_key, account.id, message.thread_key, message.date);
+  }
+  refresh();
+  return { ok: true, message: done ? "完了にしました" : "完了を外しました" };
+}
