@@ -8,6 +8,7 @@ import { saveAiResult } from "@/lib/ai/ops";
 import { CATEGORIES, PRIORITIES } from "@/lib/ai/prompts";
 import { requireSession } from "@/lib/auth/session";
 import { getDb, setSetting } from "@/lib/db";
+import { findHandledUids } from "@/lib/queries";
 import { deletePassword, isStorablePassword, keychainAvailable, writePassword } from "@/lib/keychain";
 import { TrashError, moveToTrash, setSeenFlag, syncAccount, verifyImap, type MailboxSlug } from "@/lib/mail/imap";
 import { sendMail, verifySmtp, type SendResult } from "@/lib/mail/smtp";
@@ -317,8 +318,13 @@ const TRASH_LIMIT = 500;
 /**
  * 受信トレイのメールをまとめてサーバのゴミ箱へ移す。uids は一覧に表示していたメール。
  * 手元に控えのあるメールだけを対象にし、画面で見ていない UID は受け付けない。
+ * 返信済み・完了にしたメールは、表示されていても移さない(画面の内訳と同じ決まりを、サーバでも守る)。
  */
 export async function trashMessagesAction(uids: number[]): Promise<ActionState> {
+  return trashUids(uids, { excludeHandled: true });
+}
+
+async function trashUids(uids: number[], { excludeHandled }: { excludeHandled: boolean }): Promise<ActionState> {
   await requireSession();
   if (!Array.isArray(uids) || uids.length === 0 || !uids.every((u) => Number.isInteger(u) && u > 0)) {
     return { ok: false, message: "不正な指定です" };
@@ -331,17 +337,20 @@ export async function trashMessagesAction(uids: number[]): Promise<ActionState> 
     return { ok: false, message: "読み取り専用モードなので削除しません。削除するときは設定画面でモードを外してください。" };
   }
   const exists = getDb().prepare("SELECT 1 FROM messages WHERE account = ? AND mailbox = 'inbox' AND uid = ?");
-  const targets = unique.filter((uid) => exists.get(account.id, uid));
-  if (targets.length !== unique.length) {
+  if (!unique.every((uid) => exists.get(account.id, uid))) {
     return { ok: false, message: "一覧が古くなっています。再読み込みしてから、もう一度選んでください。" };
   }
+  const handled = excludeHandled ? findHandledUids(account.id, "inbox", unique) : new Set<number>();
+  const targets = unique.filter((uid) => !handled.has(uid));
+  const skipped = handled.size > 0 ? `(返信済み・完了の ${handled.size} 通は移していません)` : "";
+  if (targets.length === 0) return { ok: false, message: `移すメールがありません${skipped}` };
   try {
     await moveToTrash(account, "inbox", targets);
   } catch (e) {
     return { ok: false, message: e instanceof TrashError ? e.message : describeError(e, "IMAP サーバ") };
   }
   refresh();
-  return { ok: true, message: `${targets.length} 通をゴミ箱へ移しました` };
+  return { ok: true, message: `${targets.length} 通をゴミ箱へ移しました${skipped}` };
 }
 
 /**
@@ -349,7 +358,8 @@ export async function trashMessagesAction(uids: number[]): Promise<ActionState> 
  * 移したメールの画面を描き直すと「見つからない」になるので、画面の移動もサーバ側でまとめて行う。
  */
 export async function trashOneAction(uid: number): Promise<ActionState> {
-  const result = await trashMessagesAction([uid]);
+  // 開いて選んだ 1 通なので、返信済み・完了でも移す
+  const result = await trashUids([uid], { excludeHandled: false });
   if (result?.ok) redirect("/mail/inbox");
   return result;
 }
