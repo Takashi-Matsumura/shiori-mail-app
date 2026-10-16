@@ -2,17 +2,19 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { trashMessagesAction } from "@/app/actions";
+import { InfoDialog } from "@/components/info-button";
 
 /**
  * 一覧に表示しているメールを、まとめてサーバのゴミ箱へ移す。
- * 押すとまず内訳を見せ、もう一度押して初めて移す(ブラウザの確認ダイアログは使わない)。
- * 確認中に表示が変わったら(フィルタの切り替えや新着)、確認を取り消して最初からにする。
+ * 押すと、ゴミ箱の仕組み(どこへ移り、どう戻せるか)を説明するダイアログを出し、そこで押して初めて移す。
+ * 確認中に表示が変わったら(フィルタの切り替えや新着)、ダイアログを閉じて最初からにする。
  */
 export function TrashShown({ items }: { items: { uid: number; category: string | null }[] }) {
   const router = useRouter();
   const params = useParams<{ uid?: string }>();
-  // 確認を出したときの表示(UID の並び)。今の表示と違えば確認は取り消し扱い
+  // ダイアログを開いたときの表示(UID の並び)。今の表示と違えば確認は取り消し扱い
   const [confirmedFor, setConfirmedFor] = useState<string | null>(null);
   const signature = items.map((i) => i.uid).join(",");
   const confirming = confirmedFor === signature;
@@ -37,49 +39,62 @@ export function TrashShown({ items }: { items: { uid: number; category: string |
 
   return (
     <div className="flex flex-col gap-1.5 text-xs">
-      {confirming ? (
-        <div role="alertdialog" aria-label="ゴミ箱へ移す確認" className="flex flex-col gap-2 rounded-lg border border-red-300 bg-red-50 p-2.5 dark:border-red-900 dark:bg-red-950/40">
-          <p>
-            表示中の <strong className="tabular-nums">{items.length} 通</strong>をサーバのゴミ箱へ移します。
-            <span className="text-muted">
-              (
-              {[...breakdown].map(([c, n]) => `${c} ${n}`).join("・")}
-              )
-            </span>
-          </p>
-          <p className="text-muted">ゴミ箱からは戻せます(Gmail では 30 日後に完全に消えます)。</p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={run}
-              disabled={pending}
-              className="rounded-full bg-red-700 px-3 py-1 font-medium text-white hover:bg-red-800 disabled:opacity-50 dark:bg-red-600"
-            >
-              {pending ? "移しています…" : `${items.length} 通をゴミ箱へ移す`}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmedFor(null)}
-              disabled={pending}
-              className="rounded-full border border-line bg-panel px-3 py-1 hover:border-accent"
-            >
-              やめる
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => {
-            setMessage(null);
-            setConfirmedFor(signature);
-          }}
-          className="self-start rounded-full border border-line bg-panel px-2.5 py-1 text-muted hover:border-red-400 hover:text-red-700 dark:hover:text-red-300"
-        >
-          表示中の {items.length} 通をゴミ箱へ…
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => {
+          setMessage(null);
+          setConfirmedFor(signature);
+        }}
+        className="self-start rounded-full border border-line bg-panel px-2.5 py-1 text-muted hover:border-red-400 hover:text-red-700 dark:hover:text-red-300"
+      >
+        表示中の {items.length} 通をゴミ箱へ…
+      </button>
       {message ? <Status {...message} /> : null}
+      {confirming
+        ? createPortal(
+            <InfoDialog
+              title={`${items.length} 通をゴミ箱へ移しますか？`}
+              // 移している最中に閉じても、移す処理は止まらない(結果は一覧の上に出る)
+              onClose={() => setConfirmedFor(null)}
+            >
+              <p>
+                対象は、いま一覧に表示している <strong className="tabular-nums">{items.length} 通</strong>です。
+                <span className="text-muted">({[...breakdown].map(([c, n]) => `${c} ${n}`).join("・")})</span>
+              </p>
+              <ul className="flex list-disc flex-col gap-1.5 pl-5">
+                <li>
+                  移す先は、<strong>メールサーバ(Gmail など)のゴミ箱</strong>です。このアプリが完全に削除するわけではありません。
+                </li>
+                <li>
+                  ゴミ箱はこのアプリには表示されません。戻したいときは、Gmail などの Web 画面でゴミ箱を開いて受信トレイへ移し、ここで「サーバと同期」を押してください。
+                </li>
+                <li>
+                  ゴミ箱に残る期間はメールサービスによって違います(Gmail は 30 日たつと自動で完全に削除されます)。
+                </li>
+                <li>このアプリの中の控えや仕分けの結果は消えます。戻したメールは、栞がもう一度仕分けます。</li>
+              </ul>
+              <div className="mt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmedFor(null)}
+                  disabled={pending}
+                  className="rounded-full border border-line bg-panel px-3.5 py-1.5 hover:border-accent"
+                >
+                  やめる
+                </button>
+                <button
+                  type="button"
+                  onClick={run}
+                  disabled={pending}
+                  className="rounded-full bg-red-700 px-3.5 py-1.5 font-medium text-white hover:bg-red-800 disabled:opacity-50 dark:bg-red-600"
+                >
+                  {pending ? "移しています…" : `${items.length} 通をゴミ箱へ移す`}
+                </button>
+              </div>
+            </InfoDialog>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

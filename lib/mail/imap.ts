@@ -217,6 +217,11 @@ export async function moveToTrash(account: Account, slug: MailboxSlug, uids: num
   await withImap(account, async (client) => {
     const trash = (await client.list()).find((b) => b.specialUse === "\\Trash");
     if (!trash) throw new TrashError("サーバにゴミ箱のフォルダが見つからないので、削除を止めました。");
+    // MOVE が無いと imapflow は「コピー → \Deleted → EXPUNGE」で代用する。そのとき UIDPLUS も無いと、
+    // 指定外のメール(別のメーラーで \Deleted を付けたもの)まで EXPUNGE で完全に消えるので、移さずに止める
+    if (!client.capabilities.has("MOVE") && !client.capabilities.has("UIDPLUS")) {
+      throw new TrashError("このメールサーバは、指定したメールだけを移す仕組み(MOVE / UIDPLUS)に対応していないので、削除を止めました。");
+    }
     const lock = await client.getMailboxLock(await resolvePath(client, account, slug));
     try {
       const moved = await client.messageMove(uids, trash.path, { uid: true });
