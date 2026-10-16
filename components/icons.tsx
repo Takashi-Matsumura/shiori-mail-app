@@ -119,3 +119,28 @@ export const ListIcon = () => (
     <path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01" />
   </Icon>
 );
+
+/** 優先度の高い順: 上から短くなる横棒 */
+export const PriorityIcon = () => (
+  <Icon>
+    <path d="M4 6h16M4 12h11M4 18h6" />
+  </Icon>
+);
+
+/** 返信済み・完了を隠す: 丸のチェックに斜線 */
+export const HideDoneIcon = () => (
+  <Icon>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="m8.5 12.3 2.4 2.4 4.6-4.9" />
+    <path d="M4.5 4.5l15 15" />
+  </Icon>
+);
+
+/** ゴミ箱 */
+export const TrashIcon = () => (
+  <Icon>
+    <path d="M4 7h16M9.5 7V4.5h5V7" />
+    <path d="M6 7l1 12.5h10L18 7" />
+    <path d="M10 11v5M14 11v5" />
+  </Icon>
+);
