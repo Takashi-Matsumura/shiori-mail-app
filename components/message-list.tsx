@@ -8,6 +8,7 @@ import { CategoryBadge } from "@/components/category-badge";
 import { PaperclipIcon } from "@/components/icons";
 import { Switch } from "@/components/switch";
 import { CATEGORIES } from "@/lib/ai/prompts";
+import { useHiddenCategories } from "@/lib/client/use-hidden-categories";
 
 type Item = {
   uid: number;
@@ -31,11 +32,13 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
   pendingClassify: number;
 }) {
   const params = useParams<{ uid?: string }>();
-  const [category, setCategory] = useState<string | null>(null);
+  const [hidden, toggleHidden] = useHiddenCategories();
   const [byPriority, setByPriority] = useState(false);
   const classified = items.some((i) => i.category);
 
-  let shown = category ? items.filter((i) => i.category === category) : items;
+  // 隠すのは仕分け済みのものだけ。まだ仕分けていないメールは必ず見せる
+  let shown = items.filter((i) => !i.category || !hidden.has(i.category));
+  const hiddenCount = items.length - shown.length;
   if (byPriority) {
     // 元の新着順を保ったまま、優先度で安定ソートする
     shown = [...shown].sort((a, b) => (PRIORITY_ORDER[a.priority ?? ""] ?? 3) - (PRIORITY_ORDER[b.priority ?? ""] ?? 3));
@@ -46,16 +49,14 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
       <header className="flex flex-col gap-3 border-b border-line px-3.5 pb-3 pt-4">
         <h1 className="text-lg font-semibold">
           {title} <span className="text-xs font-normal text-muted">{items.length} 通</span>
+          {hiddenCount > 0 ? <span className="ml-1 text-xs font-normal text-muted">(うち {hiddenCount} 通を非表示)</span> : null}
         </h1>
         {mailbox === "inbox" ? <BatchButton kind="classify" label="栞に仕分けてもらう" pending={pendingClassify} /> : null}
         {classified ? (
           <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap gap-1.5 text-xs">
-              <Chip active={category === null} onClick={() => setCategory(null)}>
-                すべて
-              </Chip>
+            <div className="flex flex-wrap gap-1.5 text-xs" role="group" aria-label="一覧に出す仕分け(押すと隠す)">
               {CATEGORIES.map((c) => (
-                <Chip key={c} active={category === c} onClick={() => setCategory(category === c ? null : c)}>
+                <Chip key={c} shown={!hidden.has(c)} onClick={() => toggleHidden(c)}>
                   {c} <span className="tabular-nums opacity-70">{items.filter((i) => i.category === c).length}</span>
                 </Chip>
               ))}
@@ -69,7 +70,7 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
       <ul className="flex flex-1 flex-col gap-1 overflow-y-auto p-2">
         {shown.length === 0 ? (
           <li className="p-4 text-muted">
-            {items.length === 0 ? "メールがありません。左の「サーバと同期」で取り込みます。" : "該当するメールがありません。"}
+            {items.length === 0 ? "メールがありません。左の「サーバと同期」で取り込みます。" : "表示するメールがありません。隠している仕分けは、上のボタンで戻せます。"}
           </li>
         ) : null}
         {shown.map((m) => {
@@ -115,14 +116,18 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
   );
 }
 
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+/** 押すたびに、その仕分けを一覧に出す/隠すを切り替える。隠しているときは取り消し線で薄く描く */
+function Chip({ shown, onClick, children }: { shown: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
-      aria-pressed={active}
+      aria-pressed={shown}
+      title={shown ? "押すと一覧から隠す" : "押すと一覧に戻す"}
       type="button"
       className={`rounded-full border px-2.5 py-1 transition-colors ${
-        active ? "border-accent bg-accent font-medium text-panel" : "border-line bg-panel hover:border-accent hover:text-accent"
+        shown
+          ? "border-line bg-panel hover:border-accent hover:text-accent"
+          : "border-dashed border-line bg-background text-muted line-through hover:text-foreground"
       }`}
     >
       {children}
