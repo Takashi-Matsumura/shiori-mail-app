@@ -1,6 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { redirect } from "next/navigation";
 import { REAL_SETTING_KEYS, buildRealAccount, getAccount, getRealAccountFields, getRealPassword } from "@/lib/accounts";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { saveAiResult } from "@/lib/ai/ops";
@@ -341,4 +342,14 @@ export async function trashMessagesAction(uids: number[]): Promise<ActionState> 
   }
   refresh();
   return { ok: true, message: `${targets.length} 通をゴミ箱へ移しました` };
+}
+
+/**
+ * 開いているメールを 1 通だけゴミ箱へ移し、メールを選んでいない受信トレイへ移る。
+ * 移したメールの画面を描き直すと「見つからない」になるので、画面の移動もサーバ側でまとめて行う。
+ */
+export async function trashOneAction(uid: number): Promise<ActionState> {
+  const result = await trashMessagesAction([uid]);
+  if (result?.ok) redirect("/mail/inbox");
+  return result;
 }

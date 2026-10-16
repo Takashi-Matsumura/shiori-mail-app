@@ -156,3 +156,9 @@ export function trashHelp(count: number, breakdown: string): string {
 
 戻したメールは、栞がもう一度仕分けます。`;
 }
+
+/** 1 通だけゴミ箱へ移す前の確認。まとめて移すとき(trashHelp)の短い版 */
+export const TRASH_ONE_HELP = `このメールを、**メールサーバ(Gmail など)のゴミ箱**へ移します。
+
+- このアプリが完全に削除するわけではありません。Gmail では **30 日**たつと自動で完全に削除されます
+- ゴミ箱はこのアプリには表示されません。戻すときは、Gmail などの Web 画面でゴミ箱から受信トレイへ移し、ここで「サーバと同期」を押します`;
