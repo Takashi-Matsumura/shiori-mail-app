@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { AiPanel } from "@/components/ai-panel";
 import { aquaClass } from "@/components/aqua-button";
 import { DoneButton } from "@/components/done-button";
+import { TrashOneButton } from "@/components/trash-one-button";
 import { ReplyIcon } from "@/components/icons";
 import { MessageBody } from "@/components/message-body";
 import { MarkSeen } from "@/components/mark-seen";
@@ -57,7 +58,10 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
           <h1 className="min-w-0 pt-2 text-xl font-semibold break-words">{message.subject || "(件名なし)"}</h1>
           <MarkSeen key={message.id} mailbox={box.slug} uid={message.uid} seen={message.seen === 1} />
           {box.slug === "inbox" ? (
-            <DoneButton key={`done-${message.id}`} messageId={message.id} done={handled.done} replied={handled.replied} />
+            <>
+              <TrashOneButton key={`trash-${message.id}`} uid={message.uid} />
+              <DoneButton key={`done-${message.id}`} messageId={message.id} done={handled.done} replied={handled.replied} />
+            </>
           ) : null}
           <Link href={`/compose?reply=${message.id}`} aria-label="返信" title="返信" className={aquaClass("solid", "md")}>
             <span className="flex items-center justify-center">
