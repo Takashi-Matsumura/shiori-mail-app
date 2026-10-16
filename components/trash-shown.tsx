@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { trashMessagesAction } from "@/app/actions";
+import { TrashIcon } from "@/components/icons";
 import { InfoDialog } from "@/components/info-button";
 import { escapeMarkdown } from "@/components/markdown";
 import { trashHelp } from "@/lib/help-texts";
@@ -12,8 +13,10 @@ import { trashHelp } from "@/lib/help-texts";
  * 一覧に表示しているメールを、まとめてサーバのゴミ箱へ移す。
  * 押すと、ゴミ箱の仕組み(どこへ移り、どう戻せるか)を説明するダイアログを出し、そこで押して初めて移す。
  * 確認中に表示が変わったら(フィルタの切り替えや新着)、ダイアログを閉じて最初からにする。
+ * 一覧の下のフッターに、アイコンのボタンと結果の一文を並べて出す。
+ * 何も隠していないとき(filtered が false)は押せない(絞り込まずに受信トレイを丸ごと移せないように)。
  */
-export function TrashShown({ items }: { items: { uid: number; category: string | null }[] }) {
+export function TrashShown({ items, filtered }: { items: { uid: number; category: string | null }[]; filtered: boolean }) {
   const router = useRouter();
   const params = useParams<{ uid?: string }>();
   // ダイアログを開いたときの表示(UID の並び)。今の表示と違えば確認は取り消し扱い
@@ -37,21 +40,31 @@ export function TrashShown({ items }: { items: { uid: number; category: string |
       if (result?.ok && params.uid && uids.includes(Number(params.uid))) router.push("/mail/inbox");
     });
 
-  if (items.length === 0) return message ? <Status {...message} /> : null;
+  const disabled = !filtered || items.length === 0 || pending;
+  const label = !filtered
+    ? "ゴミ箱へ移す(仕分けを隠して絞り込むと使えます)"
+    : items.length === 0
+      ? "ゴミ箱へ移す(表示中のメールがありません)"
+      : `表示中の ${items.length} 通をゴミ箱へ移す…`;
 
   return (
-    <div className="flex flex-col gap-1.5 text-xs">
+    <>
+      <p role={message?.ok === false ? "alert" : "status"} className={`min-w-0 flex-1 truncate text-xs ${message?.ok === false ? "text-red-700 dark:text-red-300" : "text-muted"}`} title={message?.text}>
+        {message?.text}
+      </p>
       <button
         type="button"
+        aria-label={label}
+        title={label}
+        disabled={disabled}
         onClick={() => {
           setMessage(null);
           setConfirmedFor(signature);
         }}
-        className="self-start rounded-full border border-line bg-panel px-2.5 py-1 text-muted hover:border-red-400 hover:text-red-700 dark:hover:text-red-300"
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted hover:border-red-300 hover:bg-red-50 hover:text-red-700 focus-visible:outline-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-35 dark:hover:border-red-900 dark:hover:bg-red-950/40 dark:hover:text-red-300"
       >
-        表示中の {items.length} 通をゴミ箱へ…
+        <TrashIcon />
       </button>
-      {message ? <Status {...message} /> : null}
       {confirming
         ? createPortal(
             <InfoDialog
@@ -83,14 +96,6 @@ export function TrashShown({ items }: { items: { uid: number; category: string |
             document.body,
           )
         : null}
-    </div>
-  );
-}
-
-function Status({ ok, text }: { ok: boolean; text: string }) {
-  return (
-    <p role={ok ? "status" : "alert"} className={ok ? "text-muted" : "text-red-700 dark:text-red-300"}>
-      {text}
-    </p>
+    </>
   );
 }

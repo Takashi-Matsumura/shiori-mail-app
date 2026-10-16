@@ -5,8 +5,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { BatchButton } from "@/components/batch-button";
 import { CategoryBadge } from "@/components/category-badge";
-import { CheckIcon, PaperclipIcon } from "@/components/icons";
-import { Switch } from "@/components/switch";
+import { CheckIcon, HideDoneIcon, PaperclipIcon, PriorityIcon } from "@/components/icons";
 import { TrashShown } from "@/components/trash-shown";
 import { CATEGORIES } from "@/lib/ai/prompts";
 import { useHiddenCategories } from "@/lib/client/use-hidden-categories";
@@ -67,20 +66,6 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
                 </Chip>
               ))}
             </div>
-            <div className="text-xs text-muted">
-              <Switch label="優先度の高い順に並べる" checked={byPriority} onChange={setByPriority} />
-            </div>
-          </div>
-        ) : null}
-        {/* 何かを隠しているときだけ出す(絞り込まずに受信トレイを丸ごと移せないように) */}
-        {mailbox === "inbox" && hiddenCount > 0 ? <TrashShown items={shown} /> : null}
-        {mailbox === "inbox" ? (
-          <div className="text-xs text-muted">
-            <Switch
-              label={`返信済み・完了を隠す(${items.filter((i) => i.handled).length} 通)`}
-              checked={hideHandled}
-              onChange={setHideHandled}
-            />
           </div>
         ) : null}
       </header>
@@ -138,7 +123,46 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
           );
         })}
       </ul>
+      {/*
+        たまにしか使わない操作は、上のフィルタ(仕分けのボタン)と取り違えないよう、下のフッターにアイコンだけで並べる。
+        切り替え 2 つは左、取り返しのつかないゴミ箱は右端に離して置く
+      */}
+      {mailbox === "inbox" ? (
+        <footer className="flex items-center gap-1 border-t border-line px-2 py-1.5" aria-label="一覧の操作">
+          {classified ? (
+            <ToggleIcon label="優先度の高い順に並べる" pressed={byPriority} onClick={() => setByPriority(!byPriority)}>
+              <PriorityIcon />
+            </ToggleIcon>
+          ) : null}
+          <ToggleIcon
+            label={`返信済み・完了を隠す(${items.filter((i) => i.handled).length} 通)`}
+            pressed={hideHandled}
+            onClick={() => setHideHandled(!hideHandled)}
+          >
+            <HideDoneIcon />
+          </ToggleIcon>
+          <TrashShown items={shown} filtered={hiddenCount > 0} />
+        </footer>
+      ) : null}
     </div>
+  );
+}
+
+/** フッターの切り替えボタン。名前はマウスを乗せたときと読み上げで伝え、オンの間は色を付ける */
+function ToggleIcon({ label, pressed, onClick, children }: { label: string; pressed: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={pressed}
+      title={`${label}(${pressed ? "オン" : "オフ"})`}
+      onClick={onClick}
+      className={`inline-flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:outline-2 focus-visible:outline-accent ${
+        pressed ? "border-accent bg-accent-soft text-accent" : "border-transparent text-muted hover:border-line hover:bg-background hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
