@@ -4,7 +4,7 @@ import { getSignature, requireAccount } from "@/lib/accounts";
 import { bytes, fullDate } from "@/lib/format";
 import { parseRaw } from "@/lib/mail/parse";
 import type { ExtractedItem } from "@/lib/ai/prompts";
-import { getDraft } from "@/lib/drafts";
+import { getDraft, isDraftKind, newDraftKind } from "@/lib/drafts";
 import { getAiResults, getMessageById, listContacts } from "@/lib/queries";
 
 /** 引用に使う本文を整える。行末の空白を落とし、続く空行は 1 行にまとめる(HTML メールから作った本文は空行が多い) */
@@ -29,7 +29,7 @@ export default function ComposePage({ searchParams }: PageProps<"/compose">) {
 }
 
 async function Compose({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { reply, forward } = await searchParams;
+  const { reply, forward, draft } = await searchParams;
   const account = requireAccount();
   const id = (v: typeof reply) => (typeof v === "string" && /^\d+$/.test(v) ? Number(v) : null);
   const replyId = id(reply);
@@ -40,7 +40,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
   const signature = getSignature();
   // 本文欄には自分の文章と署名だけを置く。引用・転送するメールは本文欄の下にたたんで見せ、送るときにサーバが末尾へ付ける
   const body = signature ? `\n\n${signature}` : "";
-  let defaults = { to: "", cc: "", subject: "", body, quote: "", inReplyTo: "", references: "[]" };
+  let defaults = { to: "", cc: "", subject: "", body, quote: "", inReplyTo: "", references: "[]", includeQuote: true };
   if (original) {
     const refs: string[] = original.refs ? JSON.parse(original.refs) : [];
     const quoted = tidy(original.text).split("\n").map((l) => (l ? `> ${l}` : ">")).join("\n");
@@ -53,6 +53,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       // 返信では、元メールの Message-ID を In-Reply-To に、スレッドの履歴を References に入れる
       inReplyTo: original.message_id ?? "",
       references: JSON.stringify(original.message_id ? [...refs, original.message_id] : refs),
+      includeQuote: true,
     };
   }
 
@@ -88,6 +89,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       // 転送は返事ではないので In-Reply-To は付けない。References だけで、元のスレッドとのつながりを残す
       inReplyTo: "",
       references: JSON.stringify(forwarded.message_id ? [...refs, forwarded.message_id] : refs),
+      includeQuote: true,
     };
     // 添付は、最初は全部付ける。外したいものは作成画面でチェックを外す(中身は送信のときにサーバが元メールから取り出す)
     const { attachments } = await parseRaw(Buffer.from(forwarded.raw));
@@ -102,10 +104,24 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
   // キャンセルの戻り先。返信・転送は元のメール、新規作成は受信トレイの一覧
   const source = original ?? forwarded;
   const returnTo = source ? `/mail/${source.mailbox}/${source.uid}` : "/mail/inbox";
-  const draftKind = original ? `reply-${original.id}` : forwardOf ? `forward-${forwardOf.id}` : "new";
+  // 書きかけの名前。返信・転送はメールごとに 1 つ。新規作成は開くたびに新しく作り、下書きの一覧から開いたときはその名前を使う
+  const requested = typeof draft === "string" && isDraftKind(draft) ? draft : null;
+  const draftKind = original
+    ? `reply-${original.id}`
+    : forwardOf
+      ? `forward-${forwardOf.id}`
+      : requested?.startsWith("new")
+        ? requested
+        : await newDraftKind();
+  const saved = getDraft(draftKind);
+  // 下書きの一覧から開いたときは、聞かずにそのまま書きかけを入れる
+  const openSaved = saved !== null && requested === draftKind;
+  if (saved && openSaved) {
+    defaults = { ...defaults, to: saved.to, cc: saved.cc, subject: saved.subject, body: saved.body, includeQuote: saved.includeQuote };
+  }
   return (
     <ComposeForm
-      key={replyId ? `reply-${replyId}` : forwardOf ? `forward-${forwardOf.id}` : "new"}
+      key={draftKind}
       defaults={defaults}
       replyTo={original ? { id: original.id, subject: original.subject, from: original.from_name || original.from_addr } : null}
       forward={forwardOf}
@@ -114,7 +130,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       account={{ email: account.email, name: account.name, readOnly: account.readOnly }}
       contacts={await listContacts(account.id, account.email)}
       draftKind={draftKind}
-      savedDraft={getDraft(draftKind)}
+      savedDraft={openSaved ? null : saved}
     />
   );
 }

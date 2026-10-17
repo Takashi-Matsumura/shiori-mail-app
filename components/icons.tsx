@@ -38,6 +38,14 @@ export const SentIcon = () => (
   </Icon>
 );
 
+/** 下書き: 書きかけの紙と鉛筆 */
+export const DraftIcon = () => (
+  <Icon>
+    <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6" />
+    <path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L13 13.8l-3.6.9.9-3.6z" />
+  </Icon>
+);
+
 export const SearchIcon = () => (
   <Icon>
     <circle cx="11" cy="11" r="7" />

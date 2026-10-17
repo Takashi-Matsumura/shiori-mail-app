@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { AutoRunner } from "@/components/auto-runner";
-import { InboxIcon, PlusIcon, SearchIcon, SentIcon, SettingsIcon, TasksIcon } from "@/components/icons";
+import { DraftIcon, InboxIcon, PlusIcon, SearchIcon, SentIcon, SettingsIcon, TasksIcon } from "@/components/icons";
 import { NavLink } from "@/components/nav-link";
 import { SyncButton } from "@/components/sync-button";
 import { getAccount } from "@/lib/accounts";
+import { countDrafts } from "@/lib/drafts";
 import { getCounts } from "@/lib/queries";
 
 export async function Sidebar() {
   const account = getAccount();
   const counts = account ? await getCounts(account.id) : null;
+  const drafts = account ? await countDrafts() : 0;
   return (
     <div className="flex flex-col gap-4 p-3 pt-0">
       {account ? (
@@ -46,6 +48,9 @@ export async function Sidebar() {
           受信トレイ
         </NavLink>
         <NavLink href="/mail/sent" icon={<SentIcon />}>送信済み</NavLink>
+        <NavLink href="/drafts" icon={<DraftIcon />} badge={drafts || undefined}>
+          下書き
+        </NavLink>
         <p className="mt-3 px-2 text-xs text-muted">栞</p>
         <NavLink href="/search" icon={<SearchIcon />}>検索</NavLink>
         <NavLink href="/tasks" icon={<TasksIcon />}>予定・やること</NavLink>

@@ -414,4 +414,6 @@ export async function saveDraftAction(kind: string, fields: unknown): Promise<bo
 export async function discardDraftAction(kind: string): Promise<void> {
   await requireSession();
   deleteDraft(kind);
+  // 下書きの一覧と、左のパネルの件数を描き直す
+  refresh();
 }
