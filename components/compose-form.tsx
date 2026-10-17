@@ -33,7 +33,8 @@ export type ReplyContextData = { messageId: number; summary: string | null; item
 
 type Props = {
   /** quote は本文の下にたたんで見せる引用(返信)か転送するメール。送るときにサーバが本文の末尾へ付ける */
-  defaults: { to: string; cc: string; bcc: string; subject: string; body: string; quote: string; inReplyTo: string; references: string; includeQuote: boolean };
+  // intro は本文の頭に最初から入れておく文章(転送の書き出し)。body は署名だけの本文で、栞の下書きはその上に入れる
+  defaults: { to: string; cc: string; bcc: string; subject: string; intro: string; body: string; quote: string; inReplyTo: string; references: string; includeQuote: boolean };
   replyTo: { id: number; subject: string; from: string } | null;
   forward: ForwardSource | null;
   replyContext: ReplyContextData | null;
@@ -67,7 +68,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
     cc: restored?.cc ?? defaults.cc,
     bcc: restored?.bcc ?? defaults.bcc,
     subject: restored?.subject ?? defaults.subject,
-    body: restored?.body ?? defaults.body,
+    body: restored?.body ?? defaults.intro + defaults.body,
     includeQuote: restored?.includeQuote ?? defaults.includeQuote,
   }));
   const [to, setTo] = useState(start.to);
@@ -211,7 +212,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
     let draft = "";
     unconfirm();
     setBody(rest);
-    ai.run("/api/ai/draft", { replyTo: replyTo?.id, instruction, tone }, (delta) => {
+    ai.run("/api/ai/draft", { replyTo: replyTo?.id, forwardOf: forward?.id, instruction, tone }, (delta) => {
       draft += delta;
       setBody(draft + rest);
     });
@@ -624,7 +625,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
                 replyTo
                   ? "例: 1つ目の候補日で参加できると伝える"
                   : forward
-                    ? "例: 先方に共有する一言を添える"
+                    ? "空欄なら、関係者への共有として書きます(例: 金曜までに確認してほしいと添える)"
                     : "例: 来週の打ち合わせの日程を相談したい"
               }
             />
@@ -645,9 +646,9 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
                 <AquaButton
                   type="button"
                   tone="jelly"
-                  label={!replyTo && !instruction.trim() ? "下書きを作る(先に指示を書いてください)" : "下書きを作る"}
+                  label={!replyTo && !forward && !instruction.trim() ? "下書きを作る(先に指示を書いてください)" : "下書きを作る"}
                   onClick={generate}
-                  disabled={!replyTo && !instruction.trim()}
+                  disabled={!replyTo && !forward && !instruction.trim()}
                 >
                   <SparkleIcon />
                 </AquaButton>

@@ -109,6 +109,16 @@ export function getSignature(): string {
   return getSetting(SIGNATURE_KEY) ?? "";
 }
 
+export const FORWARD_INTRO_KEY = "compose_forward_intro";
+
+/** 転送はたいてい社内の関係者への共有なので、そのまま送れる書き出しを最初から用意しておく */
+export const DEFAULT_FORWARD_INTRO = "関係者各位\n\nお疲れさまです。\n下記のメールを共有します。ご確認をお願いします。";
+
+/** 転送の画面で本文の頭に入れる文章。未設定なら既定の文、設定で空にしたなら空文字 */
+export function getForwardIntro(): string {
+  return getSetting(FORWARD_INTRO_KEY) ?? DEFAULT_FORWARD_INTRO;
+}
+
 /** 設定済みのアカウント。未設定なら null。 */
 export function getAccount(): Account | null {
   return getRealAccount();

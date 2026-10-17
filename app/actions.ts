@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
-import { REAL_SETTING_KEYS, SIGNATURE_KEY, buildRealAccount, getAccount, getRealAccountFields, getRealPassword } from "@/lib/accounts";
+import { FORWARD_INTRO_KEY, REAL_SETTING_KEYS, SIGNATURE_KEY, buildRealAccount, getAccount, getRealAccountFields, getRealPassword } from "@/lib/accounts";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { saveAiResult } from "@/lib/ai/ops";
 import { CATEGORIES, PRIORITIES } from "@/lib/ai/prompts";
@@ -221,6 +221,7 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
   setSetting("ai_embed_model", field("aiEmbedModel"));
   // 署名は行頭の空白や途中の空行も意味があるので、末尾の空白・改行だけを落とす
   setSetting(SIGNATURE_KEY, String(formData.get("signature") ?? "").replace(/\r\n?/g, "\n").replace(/\s+$/, "").slice(0, 2000));
+  setSetting(FORWARD_INTRO_KEY, String(formData.get("forwardIntro") ?? "").replace(/\r\n?/g, "\n").replace(/\s+$/, "").slice(0, 2000));
   refresh();
   if (!getAccount()) {
     return { ok: true, message: "保存しました。メールを使うには、アドレス・パスワード・IMAP / SMTP のサーバをすべて入力してください。" };
