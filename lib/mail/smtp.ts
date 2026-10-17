@@ -2,6 +2,7 @@ import "server-only";
 import nodemailer from "nodemailer";
 import MailComposer from "nodemailer/lib/mail-composer";
 import type { Account } from "@/lib/accounts";
+import { DEMO, DEMO_MESSAGE } from "@/lib/demo";
 import { appendToSent } from "@/lib/mail/imap";
 import type { AttachmentContent } from "@/lib/mail/parse";
 
@@ -29,6 +30,7 @@ export type SendResult = {
 };
 
 function createTransport(account: Account, timeouts: { connectionTimeout?: number; greetingTimeout?: number } = {}) {
+  if (DEMO) throw new Error(DEMO_MESSAGE);
   return nodemailer.createTransport({
     ...timeouts,
     host: account.smtp.host,

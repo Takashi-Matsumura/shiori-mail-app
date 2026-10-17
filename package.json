@@ -10,7 +10,9 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "ai:eval": "node scripts/eval-classifier.mts",
-    "auth:reset": "node scripts/reset-passkeys.mts"
+    "auth:reset": "node scripts/reset-passkeys.mts",
+    "demo:seed": "node scripts/seed-demo.mts",
+    "demo:dev": "MAILER_DEMO=1 next dev -H 127.0.0.1"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^14.0.0",

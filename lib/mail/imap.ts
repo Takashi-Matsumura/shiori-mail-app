@@ -2,6 +2,7 @@ import "server-only";
 import { ImapFlow } from "imapflow";
 import type { Account } from "@/lib/accounts";
 import { getDb, getSetting, setSetting } from "@/lib/db";
+import { DEMO, DEMO_MESSAGE } from "@/lib/demo";
 import { parseRaw } from "@/lib/mail/parse";
 
 export type MailboxSlug = "inbox" | "sent";
@@ -34,6 +35,7 @@ async function withImap<T>(
   fn: (client: ImapFlow) => Promise<T>,
   options: { connectionTimeout?: number; greetingTimeout?: number } = {},
 ): Promise<T> {
+  if (DEMO) throw new Error(DEMO_MESSAGE);
   const client = new ImapFlow({
     ...options,
     host: account.imap.host,
@@ -213,6 +215,8 @@ export async function importOlder(account: Account, slug: MailboxSlug): Promise<
 
 /** 受信トレイと送信済みを同期し、新しく取り込んだ通数を返す。 */
 export async function syncAccount(account: Account): Promise<number> {
+  // デモ用のデータでは、自動同期も何もせずに終える(エラーにすると、自動処理が毎回失敗を知らせてしまう)
+  if (DEMO) return 0;
   return withImap(account, async (client) => {
     let count = 0;
     for (const { slug } of MAILBOXES) count += await syncMailbox(client, account, slug);

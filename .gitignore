@@ -42,4 +42,5 @@ next-env.d.ts
 
 # local data
 /data
+/data-demo
 !.env.example
