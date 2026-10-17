@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { InlineScript } from "@/components/inline-script";
+import { PortraitOnly } from "@/components/portrait-only";
 import { NoticeProvider } from "@/lib/client/notices";
 import { PaletteSync } from "@/lib/client/use-palette";
 import { DEFAULT_PALETTE, PALETTE_INIT_SCRIPT } from "@/lib/palette";
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex h-dvh flex-col text-sm">
         <PaletteSync />
         <NoticeProvider>{children}</NoticeProvider>
+        <PortraitOnly />
       </body>
     </html>
   );
