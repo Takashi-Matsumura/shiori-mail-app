@@ -9,7 +9,7 @@ import { listTasks } from "@/lib/queries";
 export default function TasksPage() {
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
+      <div className="mx-auto flex max-w-4xl flex-col gap-4 p-4 sm:p-6">
         <h1 className="flex items-center gap-1.5 text-xl font-semibold">
           予定・やること
           <InfoButton title="予定・やること" markdown={HELP.tasks} />

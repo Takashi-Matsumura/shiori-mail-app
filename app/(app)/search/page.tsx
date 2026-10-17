@@ -14,7 +14,7 @@ import { getMessageById, getPendingCounts, keywordSearch, type SearchHit } from 
 export default function SearchPage({ searchParams }: PageProps<"/search">) {
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
+      <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4 sm:p-6">
         <h1 className="flex items-center gap-1.5 text-xl font-semibold">
           検索
           <InfoButton title="検索" markdown={HELP.search} />

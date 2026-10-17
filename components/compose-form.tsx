@@ -237,7 +237,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
         setDragging(false);
         addFiles(e.dataTransfer.files);
       }}
-      className="mx-auto grid min-h-full max-w-7xl grid-cols-1 gap-6 p-6 lg:grid-cols-[12rem_minmax(0,1fr)_18rem]"
+      className="mx-auto grid min-h-full max-w-7xl grid-cols-1 gap-6 p-4 sm:p-6 lg:grid-cols-[12rem_minmax(0,1fr)_18rem]"
     >
       <input type="hidden" name="inReplyTo" value={defaults.inReplyTo} />
       <input type="hidden" name="references" value={defaults.references} />

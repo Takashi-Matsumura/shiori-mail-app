@@ -58,7 +58,8 @@ export function MessageList({ mailbox, title, items, pendingClassify, olderRemai
   }
 
   return (
-    <div className="flex w-96 shrink-0 flex-col border-r border-line bg-panel">
+    // lg 未満では、メールを開いている間(data-mail-open があるとき)は一覧を隠す。枠は app/(app)/mail/[mailbox]/layout.tsx
+    <div className="flex w-full shrink-0 flex-col bg-panel group-has-data-mail-open/mail:hidden lg:w-96 lg:border-r lg:border-line lg:group-has-data-mail-open/mail:flex">
       <header className="flex flex-col gap-3 border-b border-line px-3.5 pb-3 pt-4">
         {/* 1 行目: 名前と通数、右端に「未対応のみ」。2 行目: 隠している通数と、仕分けの状態(小さく) */}
         <div className="flex flex-col gap-1">
@@ -101,7 +102,7 @@ export function MessageList({ mailbox, title, items, pendingClassify, olderRemai
       <ul className="flex flex-1 flex-col gap-1 overflow-y-auto p-2">
         {shown.length === 0 ? (
           <li className="p-4 text-muted">
-            {items.length === 0 ? "メールがありません。左の「サーバと同期」で取り込みます。" : "表示するメールがありません。隠している仕分けは、上のボタンで戻せます。"}
+            {items.length === 0 ? "メールがありません。メニューの「サーバと同期」で取り込みます。" : "表示するメールがありません。隠している仕分けは、上のボタンで戻せます。"}
           </li>
         ) : null}
         {shown.map((m) => {

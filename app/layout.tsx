@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { InlineScript } from "@/components/inline-script";
 import { NoticeProvider } from "@/lib/client/notices";
@@ -21,6 +21,13 @@ export const metadata: Metadata = {
   description: "AI の相棒「栞」が、メールの要約・仕分け・予定の抜き出しを手伝う、自分専用のメーラー",
 };
 
+// 画面下のタブを iPhone のホームバーの上に置けるよう、画面の端まで描く(余白は safe-area-inset で取る)
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     // data-palette は <head> のスクリプトが保存値へ書き換えるので、食い違いの警告を抑える
@@ -33,7 +40,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <InlineScript html={PALETTE_INIT_SCRIPT} />
       </head>
-      <body className="flex h-full flex-col text-sm">
+      <body className="flex h-dvh flex-col text-sm">
         <PaletteSync />
         <NoticeProvider>{children}</NoticeProvider>
       </body>
