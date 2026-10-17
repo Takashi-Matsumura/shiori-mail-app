@@ -100,7 +100,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       id: forwarded.id,
       subject: forwarded.subject,
       from: forwarded.from_name || forwarded.from_addr,
-      attachments: attachments.map((a, index) => ({ index, filename: a.filename, size: bytes(a.size), bytes: a.size })),
+      attachments: attachments.map((a, index) => ({ index, filename: a.filename, contentType: a.contentType, size: bytes(a.size), bytes: a.size })),
     };
   }
 
