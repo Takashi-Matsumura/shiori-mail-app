@@ -5,7 +5,7 @@ import { AssistButton } from "@/components/assist-button";
 import { aquaClass } from "@/components/aqua-button";
 import { DoneButton } from "@/components/done-button";
 import { TrashOneButton } from "@/components/trash-one-button";
-import { ReplyIcon, SparkleIcon } from "@/components/icons";
+import { ChevronLeftIcon, ReplyIcon, SparkleIcon } from "@/components/icons";
 import { MessageBody } from "@/components/message-body";
 import { MoreActions } from "@/components/more-actions";
 import { MarkSeen } from "@/components/mark-seen";
@@ -54,12 +54,21 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
 
   const closure = parseResult<Closure>(ai.closure);
   return (
-    <article className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
+    <article className="mx-auto flex max-w-4xl flex-col gap-4 p-4 sm:p-6">
       <header className="flex flex-col gap-3">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="min-w-0 pt-2 text-xl font-semibold break-words">{message.subject || "(件名なし)"}</h1>
+        {/* lg 未満では一覧を隠しているので、戻る道を出す */}
+        <Link
+          href={`/mail/${box.slug}`}
+          className="-ml-1.5 flex items-center gap-0.5 self-start rounded-md py-1 pr-2 text-muted hover:text-foreground lg:hidden"
+        >
+          <ChevronLeftIcon />
+          {box.label}
+        </Link>
+        {/* 狭い画面では、件名の下にボタンを並べる */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <h1 className="min-w-0 text-xl font-semibold break-words sm:pt-2">{message.subject || "(件名なし)"}</h1>
           <MarkSeen key={message.id} mailbox={box.slug} uid={message.uid} seen={message.seen === 1} />
-          <div className="flex shrink-0 items-start gap-4">
+          <div className="flex shrink-0 items-start gap-3 self-end sm:gap-4 sm:self-auto">
             {/* 整理: 栞に聞く・捨てる・済ませる */}
             <AssistButton
               key={`ai-${message.id}`}
@@ -159,7 +168,7 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
                     <span className={`w-28 shrink-0 truncate ${current ? "font-medium text-accent" : ""}`}>
                       {t.mailbox === "sent" ? "自分" : t.from_name || t.from_addr}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-muted">{t.text.replace(/\s+/g, " ").slice(0, 80)}</span>
+                    <span className="hidden min-w-0 flex-1 truncate text-muted sm:block">{t.text.replace(/\s+/g, " ").slice(0, 80)}</span>
                   </Link>
                 </li>
               );
