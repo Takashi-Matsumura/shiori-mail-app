@@ -12,6 +12,7 @@ import { deleteDraft, saveDraft } from "@/lib/drafts";
 import { findHandledUids, getMessageById } from "@/lib/queries";
 import { deletePassword, isStorablePassword, keychainAvailable, writePassword } from "@/lib/keychain";
 import { TrashError, moveToTrash, setSeenFlag, syncAccount, verifyImap, type MailboxSlug } from "@/lib/mail/imap";
+import { ATTACH_MAX_FILES, ATTACH_MAX_TOTAL } from "@/lib/mail/limits";
 import { extractAttachments, type AttachmentContent } from "@/lib/mail/parse";
 import { sendMail, verifySmtp, type SendResult } from "@/lib/mail/smtp";
 
@@ -117,6 +118,24 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
     if (chosen.size > 0) {
       attachments = (await extractAttachments(Buffer.from(original.raw))).filter((_, i) => chosen.has(i));
     }
+  }
+
+  // 自分で付けたファイル。転送の添付と合わせて、上限を超えていたら送らない
+  const uploads = formData.getAll("attachment").filter((v): v is File => v instanceof File && v.size > 0);
+  if (uploads.length + attachments.length > ATTACH_MAX_FILES) {
+    return { ok: false, message: `添付できるのは ${ATTACH_MAX_FILES} 個までです。` };
+  }
+  const total = uploads.reduce((sum, f) => sum + f.size, 0) + attachments.reduce((sum, a) => sum + a.content.length, 0);
+  if (total > ATTACH_MAX_TOTAL) {
+    return { ok: false, message: `添付の合計が大きすぎます(${Math.ceil(ATTACH_MAX_TOTAL / 1024 / 1024)}MB まで)。` };
+  }
+  for (const f of uploads) {
+    attachments.push({
+      // ファイル名はヘッダに入るので、改行と、パスの区切りに見える文字を落とす
+      filename: f.name.replace(/[\r\n\\/]/g, "_").slice(0, 200) || "file",
+      contentType: f.type || "application/octet-stream",
+      content: Buffer.from(await f.arrayBuffer()),
+    });
   }
 
   let result: SendResult;

@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
   // Node の net/tls を直接使うメール系ライブラリはバンドルせず、そのまま require させる
   serverExternalPackages: ["imapflow", "nodemailer", "mailparser"],
   partialPrefetching: true,
+  experimental: {
+    // 作成画面の添付(lib/mail/limits.ts の上限 18MB)を、サーバアクションで受け取れるようにする。
+    // multipart の区切りの分の余裕を見て少し大きくし、proxy が本文を途中で切らないよう同じ値にそろえる
+    serverActions: { bodySizeLimit: "20mb" },
+    proxyClientMaxBodySize: "20mb",
+  },
   turbopack: {
     rules: {
       "*.css": {
