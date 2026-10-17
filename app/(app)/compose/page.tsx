@@ -99,6 +99,9 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
     };
   }
 
+  // キャンセルの戻り先。返信・転送は元のメール、新規作成は受信トレイの一覧
+  const source = original ?? forwarded;
+  const returnTo = source ? `/mail/${source.mailbox}/${source.uid}` : "/mail/inbox";
   const draftKind = original ? `reply-${original.id}` : forwardOf ? `forward-${forwardOf.id}` : "new";
   return (
     <ComposeForm
@@ -107,6 +110,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       replyTo={original ? { id: original.id, subject: original.subject, from: original.from_name || original.from_addr } : null}
       forward={forwardOf}
       replyContext={replyContext}
+      returnTo={returnTo}
       account={{ email: account.email, name: account.name, readOnly: account.readOnly }}
       contacts={await listContacts(account.id, account.email)}
       draftKind={draftKind}

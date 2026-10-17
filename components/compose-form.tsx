@@ -39,12 +39,14 @@ type Props = {
   contacts: ContactOption[];
   /** draftKind の書きかけ(サーバに保存済みのもの)。無ければ null */
   draftKind: string;
+  /** キャンセルしたときの戻り先 */
+  returnTo: string;
   savedDraft: ComposeDraft | null;
 };
 
 const inputClass = "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 focus:border-accent focus:outline-none";
 
-export function ComposeForm({ defaults, replyTo, forward, replyContext, account, contacts, draftKind, savedDraft }: Props) {
+export function ComposeForm({ defaults, replyTo, forward, replyContext, account, contacts, draftKind, savedDraft, returnTo }: Props) {
   const router = useRouter();
   const { notify } = useNotices();
   const [to, setTo] = useState(defaults.to);
@@ -156,9 +158,8 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
     if (edited && !window.confirm("書きかけの内容を破棄して戻りますか？")) return;
     if (edited) draft.discard();
     ai.stop();
-    // 開いてきた画面(一覧や返信元のメール)へ戻す。URL を直接開いたときは戻り先がないので受信トレイへ。
-    if (window.history.length > 1) router.back();
-    else router.push("/mail/inbox");
+    // 「戻る」は使わない。ロック画面から開いたときなどに、ログイン画面へ戻ってしまうため。決まった戻り先へ移る
+    router.push(returnTo);
   };
 
   const generate = () => {
