@@ -1,9 +1,20 @@
 import { Suspense } from "react";
 import { ComposeForm, type ForwardSource } from "@/components/compose-form";
-import { requireAccount } from "@/lib/accounts";
+import { getSignature, requireAccount } from "@/lib/accounts";
 import { bytes, fullDate } from "@/lib/format";
 import { parseRaw } from "@/lib/mail/parse";
-import { getMessageById } from "@/lib/queries";
+import { getMessageById, listContacts } from "@/lib/queries";
+
+/** 引用に使う本文を整える。行末の空白を落とし、続く空行は 1 行にまとめる(HTML メールから作った本文は空行が多い) */
+function tidy(text: string): string {
+  return text
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((l) => l.trimEnd())
+    .filter((l, i, all) => l !== "" || (i > 0 && all[i - 1] !== ""))
+    .join("\n")
+    .trim();
+}
 
 export default function ComposePage({ searchParams }: PageProps<"/compose">) {
   return (
@@ -24,15 +35,19 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
   const original = replyId ? await getMessageById(account.id, replyId) : null;
   const forwarded = forwardId ? await getMessageById(account.id, forwardId) : null;
 
-  let defaults = { to: "", cc: "", subject: "", body: "", inReplyTo: "", references: "[]" };
+  const signature = getSignature();
+  // 本文欄には自分の文章と署名だけを置く。引用・転送するメールは本文欄の下にたたんで見せ、送るときにサーバが末尾へ付ける
+  const body = signature ? `\n\n${signature}` : "";
+  let defaults = { to: "", cc: "", subject: "", body, quote: "", inReplyTo: "", references: "[]" };
   if (original) {
     const refs: string[] = original.refs ? JSON.parse(original.refs) : [];
-    const quoted = original.text.split("\n").map((l) => `> ${l}`).join("\n");
+    const quoted = tidy(original.text).split("\n").map((l) => (l ? `> ${l}` : ">")).join("\n");
     defaults = {
       to: original.from_addr,
       cc: "",
       subject: /^re:/i.test(original.subject) ? original.subject : `Re: ${original.subject}`,
-      body: `\n\n${fullDate(original.date)} ${original.from_name || original.from_addr}:\n${quoted}`,
+      body,
+      quote: `${fullDate(original.date)} ${original.from_name || original.from_addr}:\n${quoted}`,
       // 返信では、元メールの Message-ID を In-Reply-To に、スレッドの履歴を References に入れる
       inReplyTo: original.message_id ?? "",
       references: JSON.stringify(original.message_id ? [...refs, original.message_id] : refs),
@@ -55,7 +70,8 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       to: "",
       cc: "",
       subject: /^(fwd?|転送):/i.test(forwarded.subject) ? forwarded.subject : `Fwd: ${forwarded.subject}`,
-      body: `\n\n${header}\n\n${forwarded.text}`,
+      body,
+      quote: `${header}\n\n${tidy(forwarded.text)}`,
       // 転送は返事ではないので In-Reply-To は付けない。References だけで、元のスレッドとのつながりを残す
       inReplyTo: "",
       references: JSON.stringify(forwarded.message_id ? [...refs, forwarded.message_id] : refs),
@@ -77,6 +93,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       replyTo={original ? { id: original.id, subject: original.subject, from: original.from_name || original.from_addr } : null}
       forward={forwardOf}
       account={{ email: account.email, name: account.name, readOnly: account.readOnly }}
+      contacts={await listContacts(account.id, account.email)}
     />
   );
 }

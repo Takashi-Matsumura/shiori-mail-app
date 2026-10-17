@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { PalettePicker } from "@/components/palette-picker";
 import { SettingsForm } from "@/components/settings-form";
-import { getAccount, getRealAccountFields, type Account } from "@/lib/accounts";
+import { getAccount, getRealAccountFields, getSignature, type Account } from "@/lib/accounts";
 import { keychainAvailable, readPassword } from "@/lib/keychain";
 import { AiError, probeServer } from "@/lib/ai/client";
 import { DEFAULT_AI_BASE_URL, getAiConfig } from "@/lib/ai/config";
@@ -65,6 +65,7 @@ async function Settings() {
       inUse={{ server: chat.server, model: cfg.chatModel || chatModels[0] || "" }}
       chatError={chat.error}
       embedError={separateEmbed ? embed.error : null}
+      signature={getSignature()}
     />
   );
 }

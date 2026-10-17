@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
-import { REAL_SETTING_KEYS, buildRealAccount, getAccount, getRealAccountFields, getRealPassword } from "@/lib/accounts";
+import { REAL_SETTING_KEYS, SIGNATURE_KEY, buildRealAccount, getAccount, getRealAccountFields, getRealPassword } from "@/lib/accounts";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { saveAiResult } from "@/lib/ai/ops";
 import { CATEGORIES, PRIORITIES } from "@/lib/ai/prompts";
@@ -80,7 +80,10 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
   const to = parseAddressList(field("to"));
   const cc = parseAddressList(field("cc"));
   const subject = field("subject").trim();
-  const text = field("body");
+  // 引用(返信)と転送するメールは本文欄の外にあるので、ここで本文の末尾へ付ける
+  const quote = field("quote").replace(/\r\n?/g, "\n");
+  const body = field("body").replace(/\s+$/, "");
+  const text = [body.trim() ? body : "", quote].filter(Boolean).join("\n\n");
   if (!to || to.length === 0) return { ok: false, message: "宛先のメールアドレスを確認してください(複数ならカンマ区切り)。" };
   if (!cc) return { ok: false, message: "Cc のメールアドレスを確認してください。" };
   if (!subject || /[\r\n]/.test(subject)) return { ok: false, message: "件名を入力してください。" };
@@ -175,6 +178,8 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
   setSetting("ai_classify_knn", field("aiClassifyKnn") === "on" ? "on" : "off");
   setSetting("ai_chat_model", field("aiChatModel"));
   setSetting("ai_embed_model", field("aiEmbedModel"));
+  // 署名は行頭の空白や途中の空行も意味があるので、末尾の空白・改行だけを落とす
+  setSetting(SIGNATURE_KEY, String(formData.get("signature") ?? "").replace(/\r\n?/g, "\n").replace(/\s+$/, "").slice(0, 2000));
   refresh();
   if (!getAccount()) {
     return { ok: true, message: "保存しました。メールを使うには、アドレス・パスワード・IMAP / SMTP のサーバをすべて入力してください。" };

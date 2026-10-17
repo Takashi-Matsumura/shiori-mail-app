@@ -99,6 +99,13 @@ export function buildRealAccount(f: RealAccountFields, pass: string): Account | 
   };
 }
 
+export const SIGNATURE_KEY = "compose_signature";
+
+/** 作成画面で本文の末尾に入れる署名。未設定なら空文字 */
+export function getSignature(): string {
+  return getSetting(SIGNATURE_KEY) ?? "";
+}
+
 /** 設定済みのアカウント。未設定なら null。 */
 export function getAccount(): Account | null {
   return getRealAccount();
