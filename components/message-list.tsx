@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { BatchButton } from "@/components/batch-button";
 import { CategoryBadge } from "@/components/category-badge";
-import { CheckIcon, PaperclipIcon, PriorityIcon } from "@/components/icons";
+import { CheckIcon, PaperclipIcon, PriorityIcon, SparkleIcon } from "@/components/icons";
 import { ImportOlder } from "@/components/import-older";
 import { Switch } from "@/components/switch";
 import { TrashShown } from "@/components/trash-shown";
@@ -26,6 +26,8 @@ type Item = {
   priority: string | null;
   /** 返信済みか完了にしたもの */
   handled: "replied" | "done" | null;
+  /** 栞が「やり取りは終わっていそう」と判断した理由(未対応のメールだけ) */
+  closedHint: string | null;
 };
 
 const PRIORITY_ORDER: Record<string, number> = { 高: 0, 中: 1, 低: 2 };
@@ -147,6 +149,15 @@ export function MessageList({ mailbox, title, items, pendingClassify, olderRemai
                     >
                       <CheckIcon />
                       {m.handled === "done" ? "完了" : "返信済み"}
+                    </span>
+                  ) : null}
+                  {m.closedHint ? (
+                    <span
+                      className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-dashed border-accent px-1.5 text-[11px] text-accent [&_svg]:size-3"
+                      title={`栞: ${m.closedHint}(よければメールを開いて「完了」にしてください)`}
+                    >
+                      <SparkleIcon />
+                      終わっていそう
                     </span>
                   ) : null}
                   {m.category ? <CategoryBadge category={m.category} priority={m.priority} /> : null}

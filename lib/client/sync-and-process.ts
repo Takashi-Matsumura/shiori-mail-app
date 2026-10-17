@@ -3,10 +3,12 @@
 import { syncAction } from "@/app/actions";
 import type { StreamEvent } from "@/lib/ai/stream";
 
-// 仕分けは似たメールの埋め込みを使うので、索引づくりを先に済ませる
+// 仕分けは似たメールの埋め込みを使うので、索引づくりを先に済ませる。
+// やり取りが終わっていそうかは、仕分け(要返信などか)を見て決めるので、仕分けのあとに置く
 const STEPS = [
   { kind: "embed", label: "検索用の索引" },
   { kind: "classify", label: "仕分け" },
+  { kind: "closure", label: "やり取りの確認" },
   { kind: "extract", label: "予定の抜き出し" },
 ] as const;
 

@@ -5,12 +5,12 @@ import { AssistButton } from "@/components/assist-button";
 import { aquaClass } from "@/components/aqua-button";
 import { DoneButton } from "@/components/done-button";
 import { TrashOneButton } from "@/components/trash-one-button";
-import { ReplyIcon } from "@/components/icons";
+import { ReplyIcon, SparkleIcon } from "@/components/icons";
 import { MessageBody } from "@/components/message-body";
 import { MoreActions } from "@/components/more-actions";
 import { MarkSeen } from "@/components/mark-seen";
 import { requireAccount } from "@/lib/accounts";
-import type { Classification, ExtractedItem } from "@/lib/ai/prompts";
+import type { Classification, Closure, ExtractedItem } from "@/lib/ai/prompts";
 import { bytes, fullDate } from "@/lib/format";
 import { MAILBOXES } from "@/lib/mail/imap";
 import { parseRaw } from "@/lib/mail/parse";
@@ -52,6 +52,7 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
     getHandled(message.id),
   ]);
 
+  const closure = parseResult<Closure>(ai.closure);
   return (
     <article className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
       <header className="flex flex-col gap-3">
@@ -93,6 +94,19 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
             <MoreActions key={`more-${message.id}`} messageId={message.id} />
           </div>
         </div>
+        {/* まだ対応していないメールには、やり取りが終わっていそうかの栞の判断を添える(完了にするかは利用者が決める) */}
+        {box.slug === "inbox" && !handled.done && !handled.replied && closure ? (
+          <p
+            className={`flex items-start gap-1.5 self-end rounded-lg px-2.5 py-1 text-xs [&_svg]:mt-0.5 [&_svg]:size-3.5 [&_svg]:shrink-0 ${
+              closure.status === "終わっていそう" ? "bg-accent-soft text-accent" : "text-muted"
+            }`}
+          >
+            <SparkleIcon />
+            <span>
+              栞: {closure.status === "終わっていそう" ? "やり取りは終わっていそうです" : "まだ対応が要りそうです"}({closure.reason})
+            </span>
+          </p>
+        ) : null}
         <dl className="grid grid-cols-[4rem_1fr] gap-x-2 gap-y-1 rounded-xl border border-line bg-panel px-3.5 py-3 text-muted">
           <dt>差出人</dt>
           <dd className="min-w-0 break-words text-foreground">

@@ -325,3 +325,50 @@ export function normalizeSubjects(value: unknown): string[] {
     .filter(Boolean);
   return [...new Set(out)].slice(0, 3);
 }
+
+/** やり取りが終わっていそうか(受信トレイで、まだ対応していないメールについて栞が判断する) */
+export const CLOSURE_STATUSES = ["終わっていそう", "対応が要りそう"] as const;
+export type Closure = { status: (typeof CLOSURE_STATUSES)[number]; reason: string };
+/** 判断するのは、受信者の対応が問われうる仕分けのメールだけ(宣伝・迷惑・情報共有は、もともと返事が要らない) */
+export const CLOSURE_CATEGORIES = ["要返信", "予定", "請求・手続き"] as const;
+
+export const closureSchema = {
+  type: "object",
+  properties: {
+    status: { type: "string", enum: CLOSURE_STATUSES },
+    reason: { type: "string" },
+  },
+  required: ["status", "reason"],
+  additionalProperties: false,
+} as const;
+
+export function isClosure(v: unknown): v is Closure {
+  const c = v as Closure | null;
+  return !!c && (CLOSURE_STATUSES as readonly string[]).includes(c.status) && typeof c.reason === "string";
+}
+
+/**
+ * thread は同じスレッドのメール(古い順、最後が判断する対象の受信メール)。sent は自分が送ったメールか。
+ * 受信者がまだ返事や作業をする必要があるかを判断させる。
+ */
+export function closurePrompt(thread: (MailForPrompt & { sent: boolean })[]): ChatMessage[] {
+  const tag = newTag();
+  const mails = thread.map((m, i) => {
+    const who = m.sent ? "(受信者本人が送ったメール)" : i === thread.length - 1 ? "(判断する対象の受信メール)" : "(受け取ったメール)";
+    return `${who}\n${formatMail(m, tag)}`;
+  });
+  return [
+    system(tag),
+    {
+      role: "user",
+      content: `次は同じやり取りのメール ${thread.length} 通です(古い順、最後が判断する対象)。受信者がこのやり取りで、まだ返事や作業をする必要があるかを判断してください。
+status:
+- 「終わっていそう」: 返事も作業も要らない(相手のお礼・了解・確認の連絡で締めくくられている、受信者がすでに対応済み、知らせるだけで行動を求めていない、など)
+- 「対応が要りそう」: 質問や依頼に答えていない、日程や出欠の返事が要る、期限のある支払い・手続きが残っている、など
+- 迷ったら「対応が要りそう」にする(見落としのほうが困るため)
+reason: 判断の理由を日本語で 30 文字程度。前置きは書かない
+
+${mails.join("\n\n")}`,
+    },
+  ];
+}

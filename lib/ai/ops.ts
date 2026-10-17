@@ -5,6 +5,9 @@ import { EXAMPLES_SQL, KNN_K, KNN_MODEL_PREFIX, knnClassify, toExamples, toVecto
 import {
   classifyPrompt,
   classifySchema,
+  closurePrompt,
+  closureSchema,
+  isClosure,
   extractPrompt,
   extractSchema,
   isClassification,
@@ -13,7 +16,7 @@ import {
 import { getDb } from "@/lib/db";
 import type { MessageRow } from "@/lib/queries";
 
-export type BatchKind = "classify" | "extract" | "embed";
+export type BatchKind = "classify" | "extract" | "embed" | "closure";
 
 export function saveAiResult(messageId: number, kind: string, model: string, result: string, ms: number, usage: Usage): void {
   getDb()
@@ -81,6 +84,27 @@ export async function extractFromMessage(m: MessageRow): Promise<{ ms: number; s
   const items = normalizeItems(r.value);
   saveAiResult(m.id, "extract", r.model, JSON.stringify({ items }), r.ms, r.usage);
   return { ms: r.ms, summary: `${items.length} 件` };
+}
+
+/** 判断に渡すのは、対象のメールまでのやり取りの直近この通数まで(長いスレッドで待たされすぎないように) */
+const CLOSURE_THREAD_LIMIT = 6;
+
+/** やり取りが終わっていそうかを判断する。対象のメールまで(日時がそれ以前)のスレッドを、送信済みも含めて読ませる */
+export async function closureForMessage(m: MessageRow): Promise<{ ms: number; summary: string }> {
+  const thread = (
+    m.thread_key
+      ? (getDb()
+          .prepare("SELECT * FROM messages WHERE account = ? AND thread_key = ? AND date <= ? AND id != ? ORDER BY date ASC")
+          .all(m.account, m.thread_key, m.date, m.id) as MessageRow[])
+      : []
+  )
+    .slice(-(CLOSURE_THREAD_LIMIT - 1))
+    .map((t) => ({ ...t, sent: t.mailbox === "sent" }));
+  const r = await chatJson(getAiConfig(), closurePrompt([...thread, { ...m, sent: false }]), "closure", closureSchema);
+  if (!isClosure(r.value)) throw new AiError("判断の結果が想定した形ではありませんでした。");
+  const value = { status: r.value.status, reason: r.value.reason.replace(/\s+/g, " ").trim().slice(0, 80) };
+  saveAiResult(m.id, "closure", r.model, JSON.stringify(value), r.ms, r.usage);
+  return { ms: r.ms, summary: value.status };
 }
 
 /** 埋め込みモデルによっては、文書と検索語に別々の接頭辞を付けると精度が上がる(nomic-embed-text など)。 */
