@@ -8,6 +8,8 @@ import type { AttachmentContent } from "@/lib/mail/parse";
 export type OutgoingMail = {
   to: string;
   cc?: string;
+  /** 送り先には入れるが、ヘッダには書かない(受け取った人には見えない) */
+  bcc?: string;
   subject: string;
   text: string;
   inReplyTo?: string;
@@ -56,6 +58,8 @@ export async function sendMail(account: Account, mail: OutgoingMail): Promise<Se
     from: account.name ? { name: account.name, address: account.email } : account.email,
     to: mail.to,
     cc: mail.cc || undefined,
+    // MailComposer は Bcc を送り先(エンベロープ)にだけ入れ、組み立てたメールのヘッダには残さない
+    bcc: mail.bcc || undefined,
     subject: mail.subject,
     text: mail.text,
     inReplyTo: mail.inReplyTo,

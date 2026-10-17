@@ -3,7 +3,7 @@ import { io } from "next/cache";
 import { connection } from "next/server";
 import { getDb } from "@/lib/db";
 
-export type ComposeDraftFields = { to: string; cc: string; subject: string; body: string; includeQuote: boolean };
+export type ComposeDraftFields = { to: string; cc: string; bcc: string; subject: string; body: string; includeQuote: boolean };
 export type ComposeDraft = ComposeDraftFields & { savedAt: number };
 
 /** 書いてから長く放っておいた書きかけは、もう要らないものとして出さない(読むときと保存するときに消す) */
@@ -81,7 +81,9 @@ export function getDraft(kind: string): ComposeDraft | null {
     | undefined;
   if (!row) return null;
   try {
-    return { ...(JSON.parse(row.data) as ComposeDraftFields), savedAt: row.saved };
+    // Bcc を足す前に保存した書きかけには bcc が無い
+    const data = JSON.parse(row.data) as Partial<ComposeDraftFields>;
+    return { ...(data as ComposeDraftFields), bcc: data.bcc ?? "", savedAt: row.saved };
   } catch {
     return null;
   }
@@ -95,6 +97,8 @@ export function saveDraft(kind: string, value: unknown): boolean {
   const fields = {
     to: text("to", 2000),
     cc: text("cc", 2000),
+    // Bcc を足す前の書きかけには無いので、無ければ空にする
+    bcc: text("bcc", 2000) ?? "",
     subject: text("subject", 500),
     body: text("body", 100_000),
     includeQuote: v.includeQuote !== false,

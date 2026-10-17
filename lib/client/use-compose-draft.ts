@@ -8,7 +8,7 @@ import type { ComposeDraft, ComposeDraftFields } from "@/lib/drafts";
 const SAVE_DELAY_MS = 800;
 
 const same = (a: ComposeDraftFields, b: ComposeDraftFields) =>
-  a.to === b.to && a.cc === b.cc && a.subject === b.subject && a.body === b.body && a.includeQuote === b.includeQuote;
+  a.to === b.to && a.cc === b.cc && a.bcc === b.bcc && a.subject === b.subject && a.body === b.body && a.includeQuote === b.includeQuote;
 
 /**
  * 作成画面の書きかけを、サーバ(ログインの内側)に自動で保存する。画面を離れたり、ロックされたりしても戻せる。
@@ -22,9 +22,9 @@ export function useComposeDraft(kind: string, stored: ComposeDraft | null, curre
   // 送信を始めたら、もう保存しない(送ったあとに書きかけが残らないように)
   const stopped = useRef(false);
 
-  const { to, cc, subject, body, includeQuote } = current;
+  const { to, cc, bcc, subject, body, includeQuote } = current;
   useEffect(() => {
-    const fields = { to, cc, subject, body, includeQuote };
+    const fields = { to, cc, bcc, subject, body, includeQuote };
     // 開いたときの初期値のままなら保存しない(返信を開いただけで書きかけ扱いにしない)
     if (same(fields, initial) || (stored && same(fields, stored))) return;
     const timer = setTimeout(() => {
@@ -35,7 +35,7 @@ export function useComposeDraft(kind: string, stored: ComposeDraft | null, curre
       });
     }, SAVE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [kind, to, cc, subject, body, includeQuote, initial, stored]);
+  }, [kind, to, cc, bcc, subject, body, includeQuote, initial, stored]);
 
   const stop = useCallback(() => {
     stopped.current = true;
