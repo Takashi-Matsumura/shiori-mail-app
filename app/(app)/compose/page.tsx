@@ -116,12 +116,9 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       : requested?.startsWith("new")
         ? requested
         : await newDraftKind();
-  const saved = getDraft(draftKind);
+  const saved = await getDraft(draftKind);
   // 下書きの一覧から開いたときは、聞かずにそのまま書きかけを入れる
   const openSaved = saved !== null && requested === draftKind;
-  if (saved && openSaved) {
-    defaults = { ...defaults, to: saved.to, cc: saved.cc, bcc: saved.bcc, subject: saved.subject, body: saved.body, includeQuote: saved.includeQuote };
-  }
   return (
     <ComposeForm
       key={draftKind}
@@ -134,6 +131,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       contacts={await listContacts(account.id, account.email)}
       draftKind={draftKind}
       savedDraft={openSaved ? null : saved}
+      restored={openSaved ? saved : null}
     />
   );
 }

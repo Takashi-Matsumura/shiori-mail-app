@@ -73,8 +73,10 @@ function purgeOld(): void {
   getDb().prepare("DELETE FROM compose_drafts WHERE saved < ?").run(Date.now() - MAX_AGE_MS);
 }
 
-export function getDraft(kind: string): ComposeDraft | null {
+export async function getDraft(kind: string): Promise<ComposeDraft | null> {
   if (!isDraftKind(kind)) return null;
+  // 古い書きかけを消すのに今の時刻を使うので、リクエストのときに読む(事前描画で時刻を固定しない)
+  await connection();
   purgeOld();
   const row = getDb().prepare("SELECT data, saved FROM compose_drafts WHERE kind = ?").get(kind) as
     | { data: string; saved: number }
@@ -89,8 +91,8 @@ export function getDraft(kind: string): ComposeDraft | null {
   }
 }
 
-/** 画面から来た値を確かめてから保存する。形がおかしければ保存しない */
-export function saveDraft(kind: string, value: unknown): boolean {
+/** 画面から来た値を確かめてから保存する。形がおかしければ保存しない。新しく書きかけができたら "created" */
+export function saveDraft(kind: string, value: unknown): "created" | "updated" | false {
   if (!isDraftKind(kind) || typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   const text = (name: string, max: number) => (typeof v[name] === "string" ? (v[name] as string).slice(0, max) : null);
@@ -105,12 +107,13 @@ export function saveDraft(kind: string, value: unknown): boolean {
   };
   if (fields.to === null || fields.cc === null || fields.subject === null || fields.body === null) return false;
   purgeOld();
+  const existed = !!getDb().prepare("SELECT 1 FROM compose_drafts WHERE kind = ?").get(kind);
   getDb()
     .prepare(
       "INSERT INTO compose_drafts (kind, data, saved) VALUES (?, ?, ?) ON CONFLICT (kind) DO UPDATE SET data = excluded.data, saved = excluded.saved",
     )
     .run(kind, JSON.stringify(fields), Date.now());
-  return true;
+  return existed ? "updated" : "created";
 }
 
 export function deleteDraft(kind: string): void {
