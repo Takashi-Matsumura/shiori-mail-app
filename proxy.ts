@@ -51,6 +51,7 @@ const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 export const config = {
-  // ビルド済みの JS・CSS とアイコンは、メールの内容を含まないので素通しにする
-  matcher: "/((?!_next/|icon\\.svg$|favicon\\.ico$).*)",
+  // ビルド済みの JS・CSS、アイコン、マニフェストは、メールの内容を含まないので素通しにする。
+  // ホーム画面に追加するとき、ブラウザはマニフェストとアイコンをログインの Cookie を付けずに取りに来ることがある
+  matcher: "/((?!_next/|icon\\.svg$|favicon\\.ico$|apple-icon\\.png$|manifest\\.webmanifest$|icons/).*)",
 };

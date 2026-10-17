@@ -20,6 +20,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Shiori Mail",
   description: "AI の相棒「栞」が、メールの要約・仕分け・予定の抜き出しを手伝う、自分専用のメーラー",
+  // iPhone のホーム画面に追加したときの名前。全画面で開くかどうかは app/manifest.ts の display で決まる
+  appleWebApp: { title: "Shiori", statusBarStyle: "default" },
 };
 
 // 画面下のタブを iPhone のホームバーの上に置けるよう、画面の端まで描く(余白は safe-area-inset で取る)
