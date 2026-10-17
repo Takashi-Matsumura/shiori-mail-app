@@ -35,8 +35,15 @@ export function hasUserLabel(messageId: number): boolean {
 }
 
 /**
+ * 近傍法で推定しても、会話用モデルに確かめさせる仕分け。
+ * 「宣伝」は、通販などの広告に似せた詐欺・フィッシング(本来は「迷惑」)と見分けにくい。
+ * 近傍法は「似ているか」しか見ないので、差出人のドメインの食い違いやログイン情報の要求といった手口に気づけない。
+ */
+const KNN_VERIFY_CATEGORIES = new Set(["宣伝"]);
+
+/**
  * 似たメールの仕分けから推定する。埋め込みがまだ無ければ作る。
- * 推定できない・自信が足りないときは null を返し、呼び出し側が会話用モデルに回す。
+ * 推定できない・自信が足りない・確かめたい仕分け(KNN_VERIFY_CATEGORIES)になったときは null を返し、呼び出し側が会話用モデルに回す。
  */
 async function classifyMessageWithKnn(m: MessageRow): Promise<{ ms: number; summary: string } | null> {
   const started = Date.now();
@@ -52,7 +59,7 @@ async function classifyMessageWithKnn(m: MessageRow): Promise<{ ms: number; summ
   }
   const examples = toExamples(db.prepare(EXAMPLES_SQL).all(m.account, row.model) as ExampleRow[]).filter((e) => e.messageId !== m.id);
   const r = knnClassify(toVector(row.vector), examples);
-  if (!r?.confident) return null;
+  if (!r?.confident || KNN_VERIFY_CATEGORIES.has(r.category.label)) return null;
   const percent = (n: number) => `${Math.round(n * 100)}%`;
   const value = {
     category: r.category.label,
