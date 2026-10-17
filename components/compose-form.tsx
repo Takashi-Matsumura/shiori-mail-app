@@ -6,6 +6,7 @@ import { sendAction, type SendState } from "@/app/actions";
 import { AiMeta } from "@/components/ai-meta";
 import { AddressInput, type ContactOption } from "@/components/address-input";
 import { AquaButton } from "@/components/aqua-button";
+import { AttachmentPreview, type PreviewTarget } from "@/components/attachment-preview";
 import { DisclosureButton } from "@/components/disclosure-button";
 import { ReplyContext } from "@/components/reply-context";
 import { SendReview } from "@/components/send-review";
@@ -79,13 +80,16 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
   const [quoteOpen, setQuoteOpen] = useState(false);
   const quoteId = useId();
   // 自分で付けるファイル。書きかけの保存には入らない(ファイルはこの画面の中だけで持つ)。
-  // 画像は見本を出すための URL(blob:)も一緒に持ち、外したときと画面を離れるときに捨てる
+  // 画像・PDF・テキストは中身を見るための URL(blob:)も一緒に持ち、外したときと画面を離れるときに捨てる
   const [files, setFiles] = useState<PickedFile[]>([]);
   const filesRef = useRef(files);
   useEffect(() => {
     filesRef.current = files;
   }, [files]);
   useEffect(() => () => filesRef.current.forEach(revokePreview), []);
+  // サムネイルを押して中身を見ている添付
+  const [viewing, setViewing] = useState<PreviewTarget | null>(null);
+  const attachIds = useId();
   const [fileError, setFileError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -104,7 +108,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
     if (count > ATTACH_MAX_FILES) return setFileError(`添付できるのは ${ATTACH_MAX_FILES} 個までです。`);
     if (total > ATTACH_MAX_TOTAL) return setFileError(`添付の合計は ${bytes(ATTACH_MAX_TOTAL)} までです(いま ${bytes(total)})。`);
     setFileError(null);
-    setFiles([...files, ...added.map((file) => ({ file, preview: isImage(file.type) ? URL.createObjectURL(file) : null }))]);
+    setFiles([...files, ...added.map((file) => ({ file, preview: isPreviewable(file.type) ? URL.createObjectURL(file) : null }))]);
     unconfirm();
   };
   const removeFile = (p: PickedFile) => {
@@ -354,18 +358,35 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
               // 多いときは、この中だけを送る(操作の列は画面に貼り付いているので、下が見えなくならないように)
               <ul className="-mx-1 flex flex-col gap-0.5 overflow-y-auto lg:max-h-[50vh]">
                 {/* 元メールの添付。最初は全部付け、要らないものだけ外す。本文は変わらないので、送信前の確認はそのまま */}
-                {forward?.attachments.map((a) => (
-                  <li key={`forward-${a.index}`}>
-                    <label className="flex cursor-pointer items-center gap-2 rounded-md p-1 not-has-checked:opacity-50 hover:bg-background">
-                      <input type="checkbox" name="forwardAttachment" value={a.index} defaultChecked aria-label={`${a.filename} を付ける`} className="shrink-0 accent-accent" />
-                      <AttachmentThumb name={a.filename} src={isImage(a.contentType) ? `/api/attachments/${forward.id}/${a.index}` : null} />
-                      <AttachmentName name={a.filename} size={a.size} />
-                    </label>
-                  </li>
-                ))}
+                {forward?.attachments.map((a) => {
+                  const url = `/api/attachments/${forward.id}/${a.index}`;
+                  const id = `${attachIds}-forward-${a.index}`;
+                  return (
+                    // サムネイルは中身を見るボタンなので、チェックの label の外に置く
+                    <li key={`forward-${a.index}`} className="flex items-center gap-2 rounded-md p-1 not-has-checked:opacity-50 hover:bg-background">
+                      <input id={id} type="checkbox" name="forwardAttachment" value={a.index} defaultChecked className="shrink-0 accent-accent" />
+                      <AttachmentThumb
+                        name={a.filename}
+                        src={isImage(a.contentType) ? url : null}
+                        onOpen={isPreviewable(a.contentType) ? () => setViewing({ name: a.filename, size: a.size, contentType: a.contentType, url }) : undefined}
+                      />
+                      <label htmlFor={id} className="flex min-w-0 flex-1 cursor-pointer">
+                        <AttachmentName name={a.filename} size={a.size} />
+                      </label>
+                    </li>
+                  );
+                })}
                 {files.map((p) => (
                   <li key={`${p.file.name}-${p.file.size}-${p.file.lastModified}`} className="flex items-center gap-2 rounded-md p-1 hover:bg-background">
-                    <AttachmentThumb name={p.file.name} src={p.preview} />
+                    <AttachmentThumb
+                      name={p.file.name}
+                      src={isImage(p.file.type) ? p.preview : null}
+                      onOpen={
+                        p.preview
+                          ? () => setViewing({ name: p.file.name, size: bytes(p.file.size), contentType: p.file.type, url: p.preview! })
+                          : undefined
+                      }
+                    />
                     <AttachmentName name={p.file.name} size={bytes(p.file.size)} />
                     <button
                       type="button"
@@ -405,6 +426,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
               }}
             />
             {fileError ? <p role="alert" className="text-xs text-red-600">{fileError}</p> : null}
+            {viewing ? <AttachmentPreview target={viewing} onClose={() => setViewing(null)} /> : null}
           </div>
         </div>
       </section>
@@ -641,7 +663,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
   );
 }
 
-/** 自分で付けたファイルと、画像なら見本を出すための URL(blob:) */
+/** 自分で付けたファイルと、画像・PDF・テキストなら中身を見るための URL(blob:) */
 type PickedFile = { file: File; preview: string | null };
 
 const revokePreview = (p: PickedFile) => {
@@ -651,23 +673,31 @@ const revokePreview = (p: PickedFile) => {
 /** 見本を出す画像の種類(新しいタブで開いてよい種類と同じものに限る) */
 const isImage = (contentType: string) => contentType.toLowerCase().startsWith("image/") && isPreviewable(contentType);
 
-/** 添付の小さな見本。画像は中身を縮めて、それ以外は拡張子を出す */
-function AttachmentThumb({ name, src }: { name: string; src: string | null }) {
+/** 添付の小さな見本。画像は中身を縮めて、それ以外は拡張子を出す。onOpen があれば、押すと中身を見られる */
+function AttachmentThumb({ name, src, onOpen }: { name: string; src: string | null; onOpen?: () => void }) {
   const [failed, setFailed] = useState(false);
   const ext = name.includes(".") ? name.split(".").pop()!.slice(0, 4).toUpperCase() : "";
+  const className =
+    "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-background text-[10px] font-semibold tracking-wide text-muted [&_svg]:size-4";
+  const inner =
+    src && !failed ? (
+      // blob: の URL も表示するので next/image は使わない
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} className="size-full object-cover" />
+    ) : (
+      ext || <PaperclipIcon />
+    );
+  if (!onOpen) return <span aria-hidden="true" className={className}>{inner}</span>;
   return (
-    <span
-      aria-hidden="true"
-      className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-background text-[10px] font-semibold tracking-wide text-muted [&_svg]:size-4"
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`${name} の中身を見る`}
+      title="中身を見る"
+      className={`${className} cursor-zoom-in transition-colors hover:border-accent focus-visible:outline-2 focus-visible:outline-accent`}
     >
-      {src && !failed ? (
-        // blob: の URL も表示するので next/image は使わない
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} className="size-full object-cover" />
-      ) : (
-        ext || <PaperclipIcon />
-      )}
-    </span>
+      {inner}
+    </button>
   );
 }
 
