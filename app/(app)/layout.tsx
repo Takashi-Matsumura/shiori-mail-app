@@ -3,6 +3,7 @@ import { AiInsights } from "@/components/ai-insights";
 import { AiRail } from "@/components/ai-rail";
 import { AppHeader } from "@/components/app-header";
 import { IdleLock } from "@/components/idle-lock";
+import { MobileNav } from "@/components/mobile-nav";
 import { PanelShortcuts } from "@/components/panel-shortcuts";
 import { SidePanel } from "@/components/side-panel";
 import { Sidebar } from "@/components/sidebar";
@@ -44,6 +45,9 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
           </Suspense>
         </SidePanel>
       </div>
+      <Suspense fallback={null}>
+        <MobileNav />
+      </Suspense>
     </>
   );
 }

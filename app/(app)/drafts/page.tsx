@@ -10,7 +10,7 @@ const TYPE_LABEL: Record<DraftListItem["type"], string> = { new: "新規", reply
 export default function DraftsPage() {
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-4xl flex-col gap-4 p-6">
+      <div className="mx-auto flex max-w-4xl flex-col gap-4 p-4 sm:p-6">
         <div>
           <h1 className="text-xl font-semibold">下書き</h1>
           <p className="text-xs text-muted">
