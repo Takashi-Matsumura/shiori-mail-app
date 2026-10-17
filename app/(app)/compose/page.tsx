@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { ComposeForm, type ForwardSource, type ReplyContextData } from "@/components/compose-form";
-import { getSignature, requireAccount } from "@/lib/accounts";
+import { getForwardIntro, getSignature, requireAccount } from "@/lib/accounts";
 import { bytes, fullDate } from "@/lib/format";
 import { parseRaw } from "@/lib/mail/parse";
 import type { ExtractedItem } from "@/lib/ai/prompts";
@@ -40,8 +40,9 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
   const signature = getSignature();
   // 本文欄には自分の文章と署名だけを置く。引用・転送するメールは本文欄の下にたたんで見せ、送るときにサーバが末尾へ付ける
   const body = signature ? `\n\n${signature}` : "";
+  // intro は本文の頭(署名の上)に最初から入れておく文章。いまは転送の書き出しだけ
   let defaults = { to: "", cc: "",
-      bcc: "", subject: "", body, quote: "", inReplyTo: "", references: "[]", includeQuote: true };
+      bcc: "", subject: "", intro: "", body, quote: "", inReplyTo: "", references: "[]", includeQuote: true };
   if (original) {
     const refs: string[] = original.refs ? JSON.parse(original.refs) : [];
     const quoted = tidy(original.text).split("\n").map((l) => (l ? `> ${l}` : ">")).join("\n");
@@ -50,6 +51,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       cc: "",
       bcc: "",
       subject: /^re:/i.test(original.subject) ? original.subject : `Re: ${original.subject}`,
+      intro: "",
       body,
       quote: `${fullDate(original.date)} ${original.from_name || original.from_addr}:\n${quoted}`,
       // 返信では、元メールの Message-ID を In-Reply-To に、スレッドの履歴を References に入れる
@@ -87,6 +89,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       cc: "",
       bcc: "",
       subject: /^(fwd?|転送):/i.test(forwarded.subject) ? forwarded.subject : `Fwd: ${forwarded.subject}`,
+      intro: getForwardIntro(),
       body,
       quote: `${header}\n\n${tidy(forwarded.text)}`,
       // 転送は返事ではないので In-Reply-To は付けない。References だけで、元のスレッドとのつながりを残す

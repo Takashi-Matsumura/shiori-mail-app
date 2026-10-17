@@ -82,6 +82,8 @@ ${thread.map((m) => formatMail(m, tag)).join("\n\n")}`,
 
 export function draftPrompt(opts: {
   original?: MailForPrompt;
+  /** 転送するメール。original(返信)と一緒には渡さない */
+  forwarded?: MailForPrompt;
   instruction: string;
   tone: string;
   senderName: string;
@@ -91,6 +93,23 @@ export function draftPrompt(opts: {
 - 本文だけを書く(件名・引用・説明・前置きは書かない)
 - 事実が分からない箇所は作り話をせず「【要確認: …】」と書く
 - 末尾の署名は「${opts.senderName || "(署名)"}」`;
+  if (opts.forwarded) {
+    return [
+      system(tag),
+      {
+        role: "user",
+        content: `次のメールを、社内の関係者へ転送します。転送メールの本文の頭に添える文を日本語で書いてください。
+宛てる相手は社内の関係者で、次のメールの差出人ではありません。
+利用者の意向: ${opts.instruction.trim() || "関係者に内容を共有する"}
+- 宛名(例: 関係者各位)、短いあいさつ、何のメールを共有するのかを書き、要点を 1〜3 行で添える
+- 受け手に確認や対応を求める内容なら、何をいつまでにしてほしいかを書く
+- 転送するメールは本文の下にそのまま付くので、全文を書き写さない
+${rules}
+
+${formatMail(opts.forwarded, tag)}`,
+      },
+    ];
+  }
   const instruction = opts.instruction.trim() || "内容に沿って適切に返信する";
   return [
     system(tag),

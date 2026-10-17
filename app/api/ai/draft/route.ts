@@ -9,7 +9,7 @@ import { getMessageById } from "@/lib/queries";
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return new Response("Forbidden", { status: 403 });
   if (!(await isAuthenticated())) return new Response("Unauthorized", { status: 401 });
-  const body = (await request.json().catch(() => null)) as { replyTo?: unknown; instruction?: unknown; tone?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { replyTo?: unknown; forwardOf?: unknown; instruction?: unknown; tone?: unknown } | null;
   const instruction = typeof body?.instruction === "string" ? body.instruction.slice(0, 1000) : "";
   const tone = TONES.find((t) => t === body?.tone) ?? TONES[0];
 
@@ -17,9 +17,12 @@ export async function POST(request: Request) {
   if (!account) return new Response("アカウントが未設定です", { status: 409 });
   const replyTo = Number(body?.replyTo);
   const original = Number.isInteger(replyTo) ? await getMessageById(account.id, replyTo) : null;
-  if (!original && !instruction.trim()) return new Response("Bad Request", { status: 400 });
+  // 転送するメール。転送文は、このメールに添える書き出しとして書く
+  const forwardOf = Number(body?.forwardOf);
+  const forwarded = !original && Number.isInteger(forwardOf) ? await getMessageById(account.id, forwardOf) : null;
+  if (!original && !forwarded && !instruction.trim()) return new Response("Bad Request", { status: 400 });
 
-  const prompt = draftPrompt({ original: original ?? undefined, instruction, tone, senderName: account.name });
+  const prompt = draftPrompt({ original: original ?? undefined, forwarded: forwarded ?? undefined, instruction, tone, senderName: account.name });
   // 下書きは保存しない。作成画面に流し込むだけで、送信は利用者が自分で行う。
   return ndjsonResponse(async (send) => {
     const started = Date.now();
