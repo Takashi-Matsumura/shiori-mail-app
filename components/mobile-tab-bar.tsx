@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { aquaClass } from "@/components/aqua-button";
 import { CloseIcon, DraftIcon, InboxIcon, MoreIcon, PlusIcon, SearchIcon, SentIcon, SettingsIcon, TasksIcon } from "@/components/icons";
 
 const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
@@ -31,13 +32,14 @@ export function MobileTabBar({ unread, drafts, children }: { unread: number; dra
       >
         <Tab href="/mail/inbox" label="受信" icon={<InboxIcon />} active={isActive(pathname, "/mail/inbox")} badge={unread} badgeText={`未読 ${unread} 通`} />
         <Tab href="/search" label="検索" icon={<SearchIcon />} active={isActive(pathname, "/search")} />
-        <Link
-          href="/compose"
-          aria-label="新規作成"
-          className="my-1.5 flex w-14 items-center justify-center rounded-xl bg-accent text-panel active:opacity-80"
-        >
-          <PlusIcon />
-        </Link>
+        {/* 作成はアクアの玉にして、帯から少し浮かせる */}
+        <div className="flex min-w-16 justify-center">
+          <Link href="/compose" aria-label="新規作成" className={`${aquaClass("solid", "md")} -mt-4`}>
+            <span className="flex items-center justify-center">
+              <PlusIcon />
+            </span>
+          </Link>
+        </div>
         <Tab href="/tasks" label="予定" icon={<TasksIcon />} active={isActive(pathname, "/tasks")} />
         <button
           type="button"
@@ -45,7 +47,9 @@ export function MobileTabBar({ unread, drafts, children }: { unread: number; dra
           aria-haspopup="dialog"
           className={`flex min-w-16 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] ${moreActive ? "font-medium text-accent" : "text-muted"}`}
         >
-          <MoreIcon />
+          <TabIcon active={moreActive}>
+            <MoreIcon />
+          </TabIcon>
           メニュー
         </button>
       </nav>
@@ -72,14 +76,27 @@ function Tab({ href, label, icon, active, badge, badgeText }: {
       aria-label={badge ? `${label}(${badgeText})` : label}
       className={`relative flex min-w-16 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] ${active ? "font-medium text-accent" : "text-muted"}`}
     >
-      {icon}
+      <TabIcon active={active}>{icon}</TabIcon>
       {label}
       {badge ? (
-        <span aria-hidden="true" className="absolute top-0.5 left-1/2 ml-1.5 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] leading-4 text-panel tabular-nums">
+        <span aria-hidden="true" className="absolute top-0.5 left-1/2 z-10 ml-2.5 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] leading-4 text-panel tabular-nums">
           {badge}
         </span>
       ) : null}
     </Link>
+  );
+}
+
+/** タブのアイコン。選択中は、仕分けのバッジと同じアクアのカプセル(.aqua-pill)をテーマの色で敷く */
+function TabIcon({ active, children }: { active: boolean; children: React.ReactNode }) {
+  return (
+    <span
+      className={`flex h-7 w-12 items-center justify-center rounded-full ${
+        active ? "aqua-pill [--ink:var(--accent)] [--tint:var(--accent)]" : ""
+      }`}
+    >
+      {children}
+    </span>
   );
 }
 
