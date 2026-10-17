@@ -8,9 +8,10 @@ import { saveAiResult } from "@/lib/ai/ops";
 import { CATEGORIES, PRIORITIES } from "@/lib/ai/prompts";
 import { requireSession } from "@/lib/auth/session";
 import { getDb, setSetting } from "@/lib/db";
-import { findHandledUids } from "@/lib/queries";
+import { findHandledUids, getMessageById } from "@/lib/queries";
 import { deletePassword, isStorablePassword, keychainAvailable, writePassword } from "@/lib/keychain";
 import { TrashError, moveToTrash, setSeenFlag, syncAccount, verifyImap, type MailboxSlug } from "@/lib/mail/imap";
+import { extractAttachments, type AttachmentContent } from "@/lib/mail/parse";
 import { sendMail, verifySmtp, type SendResult } from "@/lib/mail/smtp";
 
 /** section は、入力の誤りがどの欄のものか(設定画面で、その欄を開いて見せるため) */
@@ -102,6 +103,18 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
   } catch {}
   const inReplyTo = field("inReplyTo");
 
+  // 転送: 画面から受け取るのはメールの番号と添付の番号だけ。中身は、このアカウントのメールからサーバが取り出す
+  let attachments: AttachmentContent[] = [];
+  const forwardOf = field("forwardOf");
+  if (forwardOf) {
+    const original = /^\d+$/.test(forwardOf) ? await getMessageById(account.id, Number(forwardOf)) : null;
+    if (!original) return { ok: false, message: "転送するメールが見つかりません。一覧から開き直してください。" };
+    const chosen = new Set(formData.getAll("forwardAttachment").map(String).filter((v) => /^\d+$/.test(v)).map(Number));
+    if (chosen.size > 0) {
+      attachments = (await extractAttachments(Buffer.from(original.raw))).filter((_, i) => chosen.has(i));
+    }
+  }
+
   let result: SendResult;
   try {
     result = await sendMail(account, {
@@ -111,6 +124,7 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
       text,
       inReplyTo: inReplyTo && !/[\r\n]/.test(inReplyTo) ? inReplyTo : undefined,
       references,
+      attachments,
     });
   } catch (e) {
     return { ok: false, message: describeError(e, "SMTP サーバ") };

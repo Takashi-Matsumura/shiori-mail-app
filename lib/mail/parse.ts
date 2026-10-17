@@ -34,6 +34,18 @@ function htmlToText(html: string): string {
     .trim();
 }
 
+export type AttachmentContent = { filename: string; contentType: string; content: Buffer };
+
+/** 転送のために添付の中身を取り出す。並びは parseRaw の attachments と同じなので、番号で対応が取れる。 */
+export async function extractAttachments(raw: Buffer): Promise<AttachmentContent[]> {
+  const mail = await simpleParser(raw, { skipTextToHtml: true });
+  return mail.attachments.map((a) => ({
+    filename: a.filename ?? "(名前なし)",
+    contentType: a.contentType,
+    content: a.content,
+  }));
+}
+
 /** RFC 5322 形式の生データを、表示や検索に使う項目へ分解する。 */
 export async function parseRaw(raw: Buffer): Promise<ParsedMail> {
   const mail = await simpleParser(raw, { skipTextToHtml: true });

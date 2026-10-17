@@ -90,6 +90,21 @@ export const ReplyIcon = () => (
   </Icon>
 );
 
+/** 転送: 返信の矢印を左右に反転したもの */
+export const ForwardIcon = () => (
+  <Icon>
+    <path d="m15 17 5-5-5-5" />
+    <path d="M4 18v-2a4 4 0 0 1 4-4h12" />
+  </Icon>
+);
+
+/** その他の操作: 横に並んだ 3 つの点 */
+export const MoreIcon = () => (
+  <Icon>
+    <path d="M5.5 12h.01M12 12h.01M18.5 12h.01" strokeWidth="2.6" />
+  </Icon>
+);
+
 
 /** 添付: クリップ */
 export const PaperclipIcon = () => (
