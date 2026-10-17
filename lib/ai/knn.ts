@@ -27,7 +27,10 @@ export type KnnOptions = { k?: number; confidence?: number; minSimilarity?: numb
 /**
  * 教師データの読み出し。受信トレイで、同じ埋め込みモデルのベクトルがあり、仕分けの答えがあるメール。
  * 答えは、あなたの確定(classify_labels)を優先し、無ければ会話用モデルなどの判定(近傍法自身の推定は除く)。
- * 引数: account, 埋め込みモデル名
+ * 手元から消えたメールの手本(kept_examples)も加える。ただし同じメールを取り込み直して、同じベクトルの手本が手元にあれば、そちらを使う
+ * (Message-ID は差出人が自由に決められるので、重なりの判定には使わない)。
+ * 消えたメールの messageId は、手元のメールと重ならないよう負の数にする。
+ * 引数: ?1 = account, ?2 = 埋め込みモデル名
  */
 export const EXAMPLES_SQL = `
   SELECT m.id AS messageId, e.vector AS vector,
@@ -38,8 +41,19 @@ export const EXAMPLES_SQL = `
   JOIN embeddings e ON e.message_id = m.id
   LEFT JOIN classify_labels l ON l.message_id = m.id
   LEFT JOIN ai_results a ON a.message_id = m.id AND a.kind = 'classify' AND a.model NOT LIKE '${KNN_MODEL_PREFIX}%'
-  WHERE m.account = ? AND m.mailbox = 'inbox' AND e.model = ?
-    AND (l.message_id IS NOT NULL OR a.id IS NOT NULL)`;
+  WHERE m.account = ?1 AND m.mailbox = 'inbox' AND e.model = ?2
+    AND (l.message_id IS NOT NULL OR a.id IS NOT NULL)
+  UNION ALL
+  SELECT -x.id AS messageId, x.vector AS vector, x.category AS category, x.priority AS priority, x.labeled AS labeled
+  FROM kept_examples x
+  WHERE x.account = ?1 AND x.model = ?2
+    AND NOT EXISTS (
+      SELECT 1 FROM messages k JOIN embeddings ke ON ke.message_id = k.id
+      WHERE k.account = x.account AND k.mailbox = 'inbox' AND ke.model = x.model AND ke.vector = x.vector
+        -- 取り込み直したほうも手本になっている(確定か、近傍法以外の判定がある)ときだけ、そちらに譲る
+        AND (EXISTS (SELECT 1 FROM classify_labels kl WHERE kl.message_id = k.id)
+          OR EXISTS (SELECT 1 FROM ai_results ka WHERE ka.message_id = k.id AND ka.kind = 'classify' AND ka.model NOT LIKE '${KNN_MODEL_PREFIX}%'))
+    )`;
 
 export type ExampleRow = { messageId: number; vector: Uint8Array; category: string | null; priority: string | null; labeled: number };
 

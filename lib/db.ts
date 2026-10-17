@@ -2,6 +2,7 @@ import "server-only";
 import { chmodSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { KNN_MODEL_PREFIX } from "@/lib/ai/knn";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS messages (
@@ -62,6 +63,50 @@ CREATE TABLE IF NOT EXISTS classify_labels (
   ai_priority TEXT,
   created INTEGER NOT NULL
 );
+
+-- 手元から消えたメール(ゴミ箱へ移した・ほかのメーラーで消したなど)の、仕分けの手本。
+-- 近傍法(lib/ai/knn.ts)は「似たメールの仕分け」から推定するので、メールを消すと手本まで減ってしまう。
+-- 本文は残さず、埋め込みベクトルと仕分けだけを残す。
+-- 重なりの判定には、差出人が自由に決められる Message-ID ではなく、ベクトルそのものを使う
+-- (偽の Message-ID を付けたメールで、ほかのメールの手本を消したり書き換えたりできないように)。message_key は記録用
+DROP TRIGGER IF EXISTS keep_classify_example;
+DROP TABLE IF EXISTS classify_examples;
+CREATE TABLE IF NOT EXISTS kept_examples (
+  id INTEGER PRIMARY KEY,
+  account TEXT NOT NULL,
+  message_key TEXT,
+  model TEXT NOT NULL,
+  vector BLOB NOT NULL,
+  category TEXT NOT NULL,
+  priority TEXT NOT NULL,
+  labeled INTEGER NOT NULL,
+  created INTEGER NOT NULL,
+  UNIQUE (account, model, vector)
+);
+
+-- メールの行が消える直前に、手本を kept_examples へ写す(消える経路を問わず、ここ 1 か所で拾う)。
+-- 答えは、あなたの確定を優先し、無ければ会話用モデルの判定(近傍法自身の推定は手本にしない)。
+-- 同じベクトルの手本がすでにあれば、確定の手本を AI の判定で上書きしない
+CREATE TRIGGER IF NOT EXISTS keep_example_on_delete BEFORE DELETE ON messages
+WHEN OLD.mailbox = 'inbox'
+BEGIN
+  INSERT INTO kept_examples (account, message_key, model, vector, category, priority, labeled, created)
+  SELECT OLD.account, OLD.message_id, e.model, e.vector,
+         COALESCE(l.category, json_extract(a.result, '$.category')),
+         COALESCE(l.priority, json_extract(a.result, '$.priority')),
+         l.message_id IS NOT NULL,
+         CAST(unixepoch('subsec') * 1000 AS INTEGER)
+  FROM embeddings e
+  LEFT JOIN classify_labels l ON l.message_id = OLD.id
+  LEFT JOIN ai_results a ON a.message_id = OLD.id AND a.kind = 'classify' AND a.model NOT LIKE '${KNN_MODEL_PREFIX}%'
+  WHERE e.message_id = OLD.id
+    AND COALESCE(l.category, json_extract(a.result, '$.category')) IS NOT NULL
+    AND COALESCE(l.priority, json_extract(a.result, '$.priority')) IS NOT NULL
+  ON CONFLICT (account, model, vector) DO UPDATE SET
+    message_key = excluded.message_key, category = excluded.category, priority = excluded.priority,
+    labeled = excluded.labeled, created = excluded.created
+  WHERE excluded.labeled >= kept_examples.labeled;
+END;
 
 -- 読み取り専用モードで付けた既読・未読。サーバへは送らず、同期でもこちらを優先する
 CREATE TABLE IF NOT EXISTS local_seen (
