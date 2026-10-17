@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { sendAction, type SendState } from "@/app/actions";
 import { AiMeta } from "@/components/ai-meta";
 import { AddressInput, type ContactOption } from "@/components/address-input";
@@ -42,23 +42,39 @@ type Props = {
   /** キャンセルしたときの戻り先 */
   returnTo: string;
   savedDraft: ComposeDraft | null;
+  /** 下書きの一覧から開いたときの書きかけ。最初からこの内容で開く */
+  restored: ComposeDraft | null;
 };
 
 /** 宛先の横の「Cc」「Bcc」(欄を出すボタン) */
 const addFieldClass = "shrink-0 rounded-md border border-line px-2 py-1.5 text-xs text-muted hover:bg-panel hover:text-foreground";
 
+/** 宛先の欄の値を、確認のために見せる形にする(候補を選んだあとに残る末尾の「, 」を落とす) */
+const listText = (value: string) => value.replace(/[,;\s]+$/, "");
+
 const inputClass = "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 focus:border-accent focus:outline-none";
 
-export function ComposeForm({ defaults, replyTo, forward, replyContext, account, contacts, draftKind, savedDraft, returnTo }: Props) {
+export function ComposeForm({ defaults, replyTo, forward, replyContext, account, contacts, draftKind, savedDraft, restored, returnTo }: Props) {
   const router = useRouter();
   const { notify } = useNotices();
-  const [to, setTo] = useState(defaults.to);
-  const [cc, setCc] = useState(defaults.cc);
-  const [bcc, setBcc] = useState(defaults.bcc);
-  const [subject, setSubject] = useState(defaults.subject);
-  const [body, setBody] = useState(defaults.body);
+  // 開いたときの内容(書きかけを戻したならその内容)。書き換えたかどうかはこれと比べる。
+  // 開いたあとに画面が描き直されても(下書きの件数を出すための更新など)変えない。
+  // defaults.body は署名だけの本文のままにしておき、署名の上に下書きを入れる処理で使う
+  const [start] = useState(() => ({
+    to: restored?.to ?? defaults.to,
+    cc: restored?.cc ?? defaults.cc,
+    bcc: restored?.bcc ?? defaults.bcc,
+    subject: restored?.subject ?? defaults.subject,
+    body: restored?.body ?? defaults.body,
+    includeQuote: restored?.includeQuote ?? defaults.includeQuote,
+  }));
+  const [to, setTo] = useState(start.to);
+  const [cc, setCc] = useState(start.cc);
+  const [bcc, setBcc] = useState(start.bcc);
+  const [subject, setSubject] = useState(start.subject);
+  const [body, setBody] = useState(start.body);
   // 返信の引用は外せる。転送するメールは転送そのものなので、いつも付ける
-  const [includeQuote, setIncludeQuote] = useState(defaults.includeQuote);
+  const [includeQuote, setIncludeQuote] = useState(start.includeQuote);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const quoteId = useId();
   // 自分で付けるファイル。書きかけの保存には入らない(ファイルはこの画面の中だけで持つ)
@@ -87,13 +103,10 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
     unconfirm();
   };
   // Cc はたまにしか使わないので、入っているときと、「Cc」を押したときだけ出す
-  const [showCc, setShowCc] = useState(defaults.cc !== "");
-  const [showBcc, setShowBcc] = useState(defaults.bcc !== "");
+  const [showCc, setShowCc] = useState(start.cc !== "");
+  const [showBcc, setShowBcc] = useState(start.bcc !== "");
   // 書きかけの自動保存(このブラウザに保存)。開いたときに前回の書きかけがあれば、戻すかを聞く
-  const initial = useMemo(
-    () => ({ to: defaults.to, cc: defaults.cc, bcc: defaults.bcc, subject: defaults.subject, body: defaults.body, includeQuote: defaults.includeQuote }),
-    [defaults],
-  );
+  const initial = start;
   const draft = useComposeDraft(draftKind, savedDraft, { to, cc, bcc, subject, body, includeQuote }, initial);
   // 新規作成の書きかけの名前を URL に残す。自動同期などで画面が描き直されても、同じ書きかけのまま書き続けられるように
   useEffect(() => {
@@ -169,7 +182,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
 
   const cancel = () => {
     const edited =
-      to !== defaults.to || cc !== defaults.cc || bcc !== defaults.bcc || subject !== defaults.subject || body !== defaults.body || includeQuote !== defaults.includeQuote;
+      to !== start.to || cc !== start.cc || bcc !== start.bcc || subject !== start.subject || body !== start.body || includeQuote !== start.includeQuote;
     if (edited && !window.confirm("書きかけの内容を破棄して戻りますか？")) return;
     if (edited) draft.discard();
     ai.stop();
@@ -216,18 +229,18 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
                 </div>
                 <div>
                   <dt className="text-muted">宛先</dt>
-                  <dd className="break-all font-medium">{to || <span className="font-normal text-muted">未入力</span>}</dd>
+                  <dd className="break-all font-medium">{listText(to) || <span className="font-normal text-muted">未入力</span>}</dd>
                 </div>
                 {cc ? (
                   <div>
                     <dt className="text-muted">Cc</dt>
-                    <dd className="break-all font-medium">{cc}</dd>
+                    <dd className="break-all font-medium">{listText(cc)}</dd>
                   </div>
                 ) : null}
                 {bcc ? (
                   <div>
                     <dt className="text-muted">Bcc(ほかの宛先には見えません)</dt>
-                    <dd className="break-all font-medium">{bcc}</dd>
+                    <dd className="break-all font-medium">{listText(bcc)}</dd>
                   </div>
                 ) : null}
               </dl>
@@ -392,7 +405,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
                 contacts={contacts}
                 className={inputClass}
                 // 「Cc」を押して出したときは、そのまま打てるようにする
-                autoFocus={defaults.cc === ""}
+                autoFocus={start.cc === ""}
               />
             </>
           ) : (
@@ -413,7 +426,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
                 }}
                 contacts={contacts}
                 className={inputClass}
-                autoFocus={defaults.bcc === ""}
+                autoFocus={start.bcc === ""}
               />
             </>
           ) : (

@@ -402,7 +402,8 @@ export async function setDoneAction(messageId: number, done: boolean): Promise<A
   if (confirmed) {
     return {
       ok: true,
-      message: `完了にしました。仕分け「${confirmed.category}・優先度 ${confirmed.priority}」も確定しました(違っていれば「アシスト」で直せます)`,
+      // ヘッダーのお知らせは 1 行なので短くする(直し方はアシストの仕分け欄に書いてある)
+      message: `完了にしました(仕分け「${confirmed.category}・${confirmed.priority}」も確定)`,
     };
   }
   return { ok: true, message: done ? "完了にしました" : "完了を外しました" };
@@ -463,7 +464,10 @@ export async function trashOneAction(uid: number): Promise<ActionState> {
 /** 作成画面の書きかけを保存する(画面から、手が止まるたびに呼ばれる)。サーバに置くので、ロック中やログアウト後は読めない */
 export async function saveDraftAction(kind: string, fields: unknown): Promise<boolean> {
   await requireSession();
-  return saveDraft(kind, fields);
+  const result = saveDraft(kind, fields);
+  // 書きかけが新しくできたときだけ、左のパネルの下書きの件数を描き直す(書き足すたびには描き直さない)
+  if (result === "created") refresh();
+  return result !== false;
 }
 
 export async function discardDraftAction(kind: string): Promise<void> {
