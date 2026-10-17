@@ -12,6 +12,22 @@ export const MAILBOXES: { slug: MailboxSlug; label: string }[] = [
 
 /** 初回同期で取り込む上限。大きなメールボックスを丸ごと落とさないため。 */
 const INITIAL_LIMIT = 100;
+/** 「古いメールを取り込む」1 回で取り込む通数 */
+export const OLDER_BATCH = 100;
+
+/** 手元に取り込んでいない、手元の最も古いメールより前のメールが、サーバに何通あるか(同期のたびに数え直す) */
+const olderKey = (account: Account, slug: MailboxSlug) => `older_remaining:${account.id}:${slug}`;
+
+export function getOlderRemaining(account: Account, slug: MailboxSlug): number {
+  return Number(getSetting(olderKey(account, slug)) ?? 0) || 0;
+}
+
+/** サーバの UID のうち、手元の最も古いメールより前のもの(古い順) */
+function olderUids(serverUids: number[], localUids: Iterable<number>): number[] {
+  let min = Infinity;
+  for (const uid of localUids) min = Math.min(min, uid);
+  return min === Infinity ? [] : serverUids.filter((uid) => uid < min).sort((a, b) => a - b);
+}
 
 async function withImap<T>(
   account: Account,
@@ -104,56 +120,95 @@ async function syncMailbox(client: ImapFlow, account: Account, slug: MailboxSlug
 
     let fresh = serverUids.filter((uid) => uid > maxUid);
     if (maxUid === 0) fresh = fresh.slice(-INITIAL_LIMIT);
-    if (fresh.length === 0) return 0;
 
-    // source を要求すると imapflow は BODY.PEEK[] で取得するため、取り込みだけでは既読にならない
-    const fetched = [];
-    for await (const m of client.fetch(
-      fresh,
-      { uid: true, flags: true, source: true, bodyStructure: true, size: true, internalDate: true },
-      { uid: true },
-    )) {
-      if (m.source) fetched.push(m);
-    }
-
-    const insert = db.prepare(`
-      INSERT OR IGNORE INTO messages
-        (account, mailbox, uid, message_id, in_reply_to, refs, thread_key, subject, from_name, from_addr,
-         to_text, cc_text, date, seen, text, html, raw, structure, has_attachments, size)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    for (const m of fetched) {
-      const raw = m.source as Buffer;
-      const p = await parseRaw(raw);
-      const internal = m.internalDate ? new Date(m.internalDate) : new Date();
-      // スレッドの根は References の先頭。無ければ In-Reply-To、それも無ければ自分自身。
-      const threadKey = p.refs[0] ?? p.inReplyTo ?? p.messageId;
-      insert.run(
-        account.id,
-        slug,
-        m.uid,
-        p.messageId,
-        p.inReplyTo,
-        JSON.stringify(p.refs),
-        threadKey,
-        p.subject,
-        p.fromName,
-        p.fromAddr,
-        p.toText,
-        p.ccText,
-        (p.date ?? internal).getTime(),
-        m.flags?.has("\\Seen") ? 1 : 0,
-        p.text,
-        p.html,
-        raw,
-        m.bodyStructure ? JSON.stringify(m.bodyStructure) : null,
-        p.attachments.length > 0 ? 1 : 0,
-        m.size ?? raw.length,
-      );
-    }
-    return fetched.length;
+    const count = await fetchAndStore(client, account, slug, fresh);
+    // 取り込んだあとの手元の最も古いメールより前に、サーバに何通残っているか
+    const after = db.prepare("SELECT uid FROM messages WHERE account = ? AND mailbox = ?").all(account.id, slug) as { uid: number }[];
+    setSetting(olderKey(account, slug), String(olderUids(serverUids, after.map((r) => r.uid)).length));
+    return count;
   } finally {
     lock.release();
   }
+}
+
+/** 指定した UID のメールをサーバから取り出して、手元に保存する。保存した通数を返す */
+async function fetchAndStore(client: ImapFlow, account: Account, slug: MailboxSlug, uids: number[]): Promise<number> {
+  if (uids.length === 0) return 0;
+  const db = getDb();
+  // source を要求すると imapflow は BODY.PEEK[] で取得するため、取り込みだけでは既読にならない
+  const fetched = [];
+  for await (const m of client.fetch(
+    uids,
+    { uid: true, flags: true, source: true, bodyStructure: true, size: true, internalDate: true },
+    { uid: true },
+  )) {
+    if (m.source) fetched.push(m);
+  }
+
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO messages
+      (account, mailbox, uid, message_id, in_reply_to, refs, thread_key, subject, from_name, from_addr,
+       to_text, cc_text, date, seen, text, html, raw, structure, has_attachments, size)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  for (const m of fetched) {
+    const raw = m.source as Buffer;
+    const p = await parseRaw(raw);
+    const internal = m.internalDate ? new Date(m.internalDate) : new Date();
+    // スレッドの根は References の先頭。無ければ In-Reply-To、それも無ければ自分自身。
+    const threadKey = p.refs[0] ?? p.inReplyTo ?? p.messageId;
+    insert.run(
+      account.id,
+      slug,
+      m.uid,
+      p.messageId,
+      p.inReplyTo,
+      JSON.stringify(p.refs),
+      threadKey,
+      p.subject,
+      p.fromName,
+      p.fromAddr,
+      p.toText,
+      p.ccText,
+      (p.date ?? internal).getTime(),
+      m.flags?.has("\\Seen") ? 1 : 0,
+      p.text,
+      p.html,
+      raw,
+      m.bodyStructure ? JSON.stringify(m.bodyStructure) : null,
+      p.attachments.length > 0 ? 1 : 0,
+      m.size ?? raw.length,
+    );
+  }
+  return fetched.length;
+}
+
+/**
+ * 手元の最も古いメールより前のメールを、新しいほうから OLDER_BATCH 通だけ取り込む。
+ * 新着の同期とは別に、利用者が「古いメールを取り込む」を押したときだけ動く。
+ */
+export async function importOlder(account: Account, slug: MailboxSlug): Promise<{ imported: number; remaining: number }> {
+  return withImap(account, async (client) => {
+    const db = getDb();
+    const path = await resolvePath(client, account, slug);
+    const lock = await client.getMailboxLock(path, { readOnly: account.readOnly });
+    try {
+      const mailbox = client.mailbox;
+      // UID が振り直されていたら、先にふつうの同期で取り直してもらう(ここで古い UID を混ぜない)
+      if (!mailbox || getSetting(`uidvalidity:${account.id}:${slug}`) !== String(mailbox.uidValidity)) return { imported: 0, remaining: 0 };
+      const serverUids = mailbox.exists ? ((await client.search({ all: true }, { uid: true })) || []) : [];
+      const local = (db.prepare("SELECT uid FROM messages WHERE account = ? AND mailbox = ?").all(account.id, slug) as { uid: number }[]).map(
+        (r) => r.uid,
+      );
+      const older = olderUids(serverUids, local);
+      const batch = older.slice(-OLDER_BATCH);
+      const imported = await fetchAndStore(client, account, slug, batch);
+      const remaining = older.length - batch.length;
+      setSetting(olderKey(account, slug), String(remaining));
+      return { imported, remaining };
+    } finally {
+      lock.release();
+    }
+  });
 }
 
 /** 受信トレイと送信済みを同期し、新しく取り込んだ通数を返す。 */
