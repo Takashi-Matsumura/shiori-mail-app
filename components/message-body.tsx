@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { PaperclipIcon } from "@/components/icons";
+import { DownloadIcon, PaperclipIcon } from "@/components/icons";
+import { isPreviewable } from "@/lib/mail/attachment-types";
 
 type Props = {
+  messageId: number;
   text: string;
   html: string | null;
   size: string;
@@ -48,7 +50,7 @@ function sanitizeHtml(html: string): { body: string; remoteImages: number } {
 
 const noop = () => () => {};
 
-function Body({ text, html, attachments }: Omit<Props, "size">) {
+function Body({ messageId, text, html, attachments }: Omit<Props, "size">) {
   const [mode, setMode] = useState<"text" | "html">(html ? "html" : "text");
   const [allowImages, setAllowImages] = useState(false);
   // 無害化に使う DOMParser はブラウザにしか無い。サーバでの描画(と、それに合わせる最初の描画)では解析せず、
@@ -103,13 +105,36 @@ function Body({ text, html, attachments }: Omit<Props, "size">) {
       )}
       {attachments.length > 0 ? (
         <ul className="flex flex-wrap gap-2 border-t border-line pt-3">
-          {attachments.map((a, i) => (
-            <li key={i} className="flex items-center gap-1.5 rounded-lg border border-line bg-background px-2.5 py-1.5 text-xs [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted">
-              <PaperclipIcon />
-              <span className="font-medium">{a.filename}</span>
-              <span className="text-muted">{a.contentType} ・ {a.size}</span>
-            </li>
-          ))}
+          {attachments.map((a, i) => {
+            const url = `/api/attachments/${messageId}/${i}`;
+            // 画像・PDF・テキストは新しいタブで開ける。それ以外(Office の文書など)は保存してから開く
+            const preview = isPreviewable(a.contentType);
+            return (
+              <li key={i} className="flex items-center overflow-hidden rounded-lg border border-line bg-background text-xs [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted">
+                <a
+                  href={preview ? url : `${url}?download=1`}
+                  {...(preview ? { target: "_blank", rel: "noopener noreferrer" } : { download: a.filename })}
+                  title={preview ? `${a.filename} を新しいタブで開く` : `${a.filename} を保存`}
+                  className="flex min-w-0 items-center gap-1.5 px-2.5 py-1.5 hover:bg-panel"
+                >
+                  {preview ? <PaperclipIcon /> : <DownloadIcon />}
+                  <span className="truncate font-medium text-accent underline-offset-2 hover:underline">{a.filename}</span>
+                  <span className="shrink-0 text-muted">{a.size}</span>
+                </a>
+                {preview ? (
+                  <a
+                    href={`${url}?download=1`}
+                    download={a.filename}
+                    aria-label={`${a.filename} を保存`}
+                    title="保存"
+                    className="border-l border-line px-2 py-1.5 hover:bg-panel"
+                  >
+                    <DownloadIcon />
+                  </a>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </div>
