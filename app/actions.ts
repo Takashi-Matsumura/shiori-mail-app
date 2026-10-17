@@ -306,6 +306,17 @@ export async function labelClassificationAction(messageId: number, category: str
   if (!account) return { ok: false, message: NO_ACCOUNT };
   const owned = db.prepare("SELECT 1 FROM messages WHERE id = ? AND account = ?").get(messageId, account.id);
   if (!owned) return { ok: false, message: "メールが見つかりません。" };
+  confirmLabel(messageId, category, priority);
+  refresh();
+  return { ok: true, message: "確定しました" };
+}
+
+/**
+ * 仕分けを「あなたが確定した」ものとして記録する(近傍法の手本で重く数え、AI に上書きさせない)。
+ * 呼ぶ側で、メールがこのアカウントのものか、値が正しいかを確かめておく。
+ */
+function confirmLabel(messageId: number, category: string, priority: string): void {
+  const db = getDb();
   const ai = db.prepare("SELECT model, result FROM ai_results WHERE message_id = ? AND kind = 'classify'").get(messageId) as
     | { model: string; result: string }
     | undefined;
@@ -326,8 +337,6 @@ export async function labelClassificationAction(messageId: number, category: str
     promptTokens: null,
     completionTokens: null,
   });
-  refresh();
-  return { ok: true, message: "確定しました" };
 }
 
 /** 確定を外し、まだ仕分けていない状態に戻す(次の自動処理か「実行する」で、改めて AI が仕分ける)。 */
@@ -360,8 +369,29 @@ export async function setDoneAction(messageId: number, done: boolean): Promise<A
     | { id: number; thread_key: string | null; date: number }
     | undefined;
   if (!message) return { ok: false, message: "メールが見つかりません。" };
+  // 完了にしたら、そのときの仕分けも確定する。メールを開いて仕分けを見たうえで対応したので、仕分けにも異議はないとみなす
+  // (まだ確定していないメールだけ。完了を外しても、確定は残す)
+  let confirmed: { category: string; priority: string } | null = null;
   if (done) {
     db.prepare("INSERT OR IGNORE INTO message_done (message_id, created) VALUES (?, ?)").run(messageId, Date.now());
+    const labeled = db.prepare("SELECT 1 FROM classify_labels WHERE message_id = ?").get(messageId);
+    const row = db.prepare("SELECT result FROM ai_results WHERE message_id = ? AND kind = 'classify'").get(messageId) as
+      | { result: string }
+      | undefined;
+    let value: { category?: unknown; priority?: unknown } = {};
+    try {
+      value = row ? JSON.parse(row.result) : {};
+    } catch {}
+    if (
+      !labeled &&
+      typeof value.category === "string" &&
+      typeof value.priority === "string" &&
+      (CATEGORIES as readonly string[]).includes(value.category) &&
+      (PRIORITIES as readonly string[]).includes(value.priority)
+    ) {
+      confirmLabel(messageId, value.category, value.priority);
+      confirmed = { category: value.category, priority: value.priority };
+    }
   } else {
     db.prepare(
       `DELETE FROM message_done WHERE message_id = ? OR message_id IN (
@@ -369,6 +399,12 @@ export async function setDoneAction(messageId: number, done: boolean): Promise<A
     ).run(messageId, message.thread_key, account.id, message.thread_key, message.date);
   }
   refresh();
+  if (confirmed) {
+    return {
+      ok: true,
+      message: `完了にしました。仕分け「${confirmed.category}・優先度 ${confirmed.priority}」も確定しました(違っていれば「アシスト」で直せます)`,
+    };
+  }
   return { ok: true, message: done ? "完了にしました" : "完了を外しました" };
 }
 
