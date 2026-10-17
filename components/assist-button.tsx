@@ -14,10 +14,13 @@ export function AssistButton(props: AiPanelProps) {
   const [open, setOpen] = useState(false);
   return (
     <div className="flex shrink-0 flex-col items-center gap-1">
-      <AquaButton type="button" tone="jelly" size="md" label="栞のアシスト" aria-expanded={open} onClick={() => setOpen(true)}>
-        <SparkleIcon />
-      </AquaButton>
-      <span className="text-[11px] text-muted">栞のアシスト</span>
+      {/* 整理の操作は、応答(返信・その他)より一回り小さくする。枠は応答のボタンと同じ高さにして、上下の中心を揃える */}
+      <div className="flex h-13 items-center">
+        <AquaButton type="button" tone="jelly" size="sm" label="栞のアシスト" aria-expanded={open} onClick={() => setOpen(true)}>
+          <SparkleIcon />
+        </AquaButton>
+      </div>
+      <span className="text-[11px] text-muted">アシスト</span>
       {open ? createPortal(<AssistSheet {...props} onClose={() => setOpen(false)} />, document.body) : null}
     </div>
   );

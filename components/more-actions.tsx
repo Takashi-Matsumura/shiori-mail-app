@@ -35,20 +35,17 @@ export function MoreActions({ messageId }: { messageId: number }) {
 
   return (
     <div ref={root} className="relative flex shrink-0 flex-col items-center gap-1">
-      {/* 返信(md)と縦の中心を揃えるため、小さいボタンを md と同じ高さの枠に入れる */}
-      <div className="flex h-13 items-center">
-        <AquaButton
-          type="button"
-          tone="glass"
-          size="sm"
-          label="その他の操作"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-        >
-          <MoreIcon />
-        </AquaButton>
-      </div>
+      <AquaButton
+        type="button"
+        tone="glass"
+        size="md"
+        label="その他の操作"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <MoreIcon />
+      </AquaButton>
       <span aria-hidden="true" className="text-[11px] text-muted">
         その他
       </span>
