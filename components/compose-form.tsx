@@ -31,7 +31,7 @@ export type ReplyContextData = { messageId: number; summary: string | null; item
 
 type Props = {
   /** quote は本文の下にたたんで見せる引用(返信)か転送するメール。送るときにサーバが本文の末尾へ付ける */
-  defaults: { to: string; cc: string; subject: string; body: string; quote: string; inReplyTo: string; references: string };
+  defaults: { to: string; cc: string; subject: string; body: string; quote: string; inReplyTo: string; references: string; includeQuote: boolean };
   replyTo: { id: number; subject: string; from: string } | null;
   forward: ForwardSource | null;
   replyContext: ReplyContextData | null;
@@ -54,7 +54,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
   const [subject, setSubject] = useState(defaults.subject);
   const [body, setBody] = useState(defaults.body);
   // 返信の引用は外せる。転送するメールは転送そのものなので、いつも付ける
-  const [includeQuote, setIncludeQuote] = useState(true);
+  const [includeQuote, setIncludeQuote] = useState(defaults.includeQuote);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const quoteId = useId();
   // 自分で付けるファイル。書きかけの保存には入らない(ファイルはこの画面の中だけで持つ)
@@ -86,10 +86,18 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
   const [showCc, setShowCc] = useState(defaults.cc !== "");
   // 書きかけの自動保存(このブラウザに保存)。開いたときに前回の書きかけがあれば、戻すかを聞く
   const initial = useMemo(
-    () => ({ to: defaults.to, cc: defaults.cc, subject: defaults.subject, body: defaults.body, includeQuote: true }),
+    () => ({ to: defaults.to, cc: defaults.cc, subject: defaults.subject, body: defaults.body, includeQuote: defaults.includeQuote }),
     [defaults],
   );
   const draft = useComposeDraft(draftKind, savedDraft, { to, cc, subject, body, includeQuote }, initial);
+  // 新規作成の書きかけの名前を URL に残す。自動同期などで画面が描き直されても、同じ書きかけのまま書き続けられるように
+  useEffect(() => {
+    if (!draftKind.startsWith("new")) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("draft") === draftKind) return;
+    url.searchParams.set("draft", draftKind);
+    window.history.replaceState(null, "", url);
+  }, [draftKind]);
   const restore = () => {
     if (!draft.saved) return;
     setTo(draft.saved.to);
@@ -154,7 +162,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
 
   const cancel = () => {
     const edited =
-      to !== defaults.to || cc !== defaults.cc || subject !== defaults.subject || body !== defaults.body || !includeQuote;
+      to !== defaults.to || cc !== defaults.cc || subject !== defaults.subject || body !== defaults.body || includeQuote !== defaults.includeQuote;
     if (edited && !window.confirm("書きかけの内容を破棄して戻りますか？")) return;
     if (edited) draft.discard();
     ai.stop();

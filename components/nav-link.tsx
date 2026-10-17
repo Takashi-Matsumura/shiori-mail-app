@@ -34,10 +34,23 @@ export function NavLink({
 }
 
 /** 畳んだパネル用の小さなリンク。見出しはアイコンにし、名前は title と読み上げで伝える。 */
-export function RailLink({ href, label, icon, badge }: { href: string; label: string; icon: React.ReactNode; badge?: number }) {
+export function RailLink({
+  href,
+  label,
+  icon,
+  badge,
+  badgeText,
+}: {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  badge?: number;
+  /** 読み上げと title で、数字が何の数かを伝える。省くと未読の通数として読む */
+  badgeText?: string;
+}) {
   const pathname = usePathname();
   const active = pathname === href || pathname.startsWith(href + "/");
-  const name = badge ? `${label}(未読 ${badge} 通)` : label;
+  const name = badge ? `${label}(${badgeText ?? `未読 ${badge} 通`})` : label;
   return (
     <Link
       href={href}
