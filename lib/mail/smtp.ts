@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import MailComposer from "nodemailer/lib/mail-composer";
 import type { Account } from "@/lib/accounts";
 import { appendToSent } from "@/lib/mail/imap";
+import type { AttachmentContent } from "@/lib/mail/parse";
 
 export type OutgoingMail = {
   to: string;
@@ -11,6 +12,8 @@ export type OutgoingMail = {
   text: string;
   inReplyTo?: string;
   references?: string[];
+  /** 転送で元メールから引き継ぐ添付 */
+  attachments?: AttachmentContent[];
 };
 
 export type SendResult = {
@@ -57,6 +60,7 @@ export async function sendMail(account: Account, mail: OutgoingMail): Promise<Se
     text: mail.text,
     inReplyTo: mail.inReplyTo,
     references: mail.references,
+    attachments: mail.attachments,
   }).compile();
   const envelope = node.getEnvelope();
   const messageId = node.messageId();

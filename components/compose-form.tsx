@@ -6,21 +6,30 @@ import { sendAction, type SendState } from "@/app/actions";
 import { AiMeta } from "@/components/ai-meta";
 import { AquaButton } from "@/components/aqua-button";
 import { SendReview } from "@/components/send-review";
-import { CheckIcon, CloseIcon, SentIcon, SparkleIcon } from "@/components/icons";
+import { CheckIcon, CloseIcon, PaperclipIcon, SentIcon, SparkleIcon } from "@/components/icons";
 import { TONES } from "@/lib/ai/prompts";
 import { useNotices } from "@/lib/client/notices";
 import { useAiStream } from "@/lib/client/use-ai-stream";
 import { useSendReview } from "@/lib/client/use-send-review";
 
+/** 転送するメール。attachments の index は、送信のときにサーバが元メールの添付を取り出す番号 */
+export type ForwardSource = {
+  id: number;
+  subject: string;
+  from: string;
+  attachments: { index: number; filename: string; size: string }[];
+};
+
 type Props = {
   defaults: { to: string; cc: string; subject: string; body: string; inReplyTo: string; references: string };
   replyTo: { id: number; subject: string; from: string } | null;
+  forward: ForwardSource | null;
   account: { email: string; name: string; readOnly: boolean };
 };
 
 const inputClass = "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 focus:border-accent focus:outline-none";
 
-export function ComposeForm({ defaults, replyTo, account }: Props) {
+export function ComposeForm({ defaults, replyTo, forward, account }: Props) {
   const router = useRouter();
   const { notify } = useNotices();
   // 送れたら、結果はヘッダーのお知らせで伝えて一覧へ戻る。遷移もアクションの中で行い、戻るまで「送信中…」のままにする。
@@ -97,6 +106,7 @@ export function ComposeForm({ defaults, replyTo, account }: Props) {
     >
       <input type="hidden" name="inReplyTo" value={defaults.inReplyTo} />
       <input type="hidden" name="references" value={defaults.references} />
+      {forward ? <input type="hidden" name="forwardOf" value={forward.id} /> : null}
 
       <section aria-label="操作" className="order-3 flex flex-col gap-3 lg:order-1">
         <div className="flex flex-col gap-3 lg:sticky lg:top-0">
@@ -199,8 +209,9 @@ export function ComposeForm({ defaults, replyTo, account }: Props) {
 
       <section aria-label="メール" className="order-1 flex min-w-0 flex-col gap-3 lg:order-2">
         <div>
-          <h1 className="text-xl font-semibold">{replyTo ? "返信" : "新規作成"}</h1>
+          <h1 className="text-xl font-semibold">{replyTo ? "返信" : forward ? "転送" : "新規作成"}</h1>
           {replyTo ? <p className="text-muted">{replyTo.from} さんの「{replyTo.subject}」への返信</p> : null}
+          {forward ? <p className="text-muted">{forward.from} さんの「{forward.subject}」を転送</p> : null}
         </div>
         <div className="grid grid-cols-[4rem_1fr] items-center gap-x-2 gap-y-2">
           <span className="text-muted">差出人</span>
@@ -220,6 +231,26 @@ export function ComposeForm({ defaults, replyTo, account }: Props) {
               setSubject(e.target.value);
               unconfirm();
             }} className={inputClass} autoComplete="off" />
+          {forward && forward.attachments.length > 0 ? (
+            <>
+              <span className="self-start pt-1 text-muted">添付</span>
+              {/* 元メールの添付。最初は全部付け、要らないものだけ外す。本文は変わらないので、送信前の確認はそのまま */}
+              <ul className="flex flex-col gap-1">
+                {forward.attachments.map((a) => (
+                  <li key={a.index}>
+                    <label className="flex cursor-pointer items-center gap-2">
+                      <input type="checkbox" name="forwardAttachment" value={a.index} defaultChecked className="accent-accent" />
+                      <span className="text-muted [&_svg]:size-4" aria-hidden="true">
+                        <PaperclipIcon />
+                      </span>
+                      <span className="min-w-0 truncate">{a.filename}</span>
+                      <span className="shrink-0 text-xs text-muted tabular-nums">{a.size}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </div>
         <label htmlFor="body" className="sr-only">本文</label>
         <textarea
@@ -254,7 +285,13 @@ export function ComposeForm({ defaults, replyTo, account }: Props) {
               }}
               rows={3}
               className={`${inputClass} resize-y`}
-              placeholder={replyTo ? "例: 1つ目の候補日で参加できると伝える" : "例: 来週の打ち合わせの日程を相談したい"}
+              placeholder={
+                replyTo
+                  ? "例: 1つ目の候補日で参加できると伝える"
+                  : forward
+                    ? "例: 先方に共有する一言を添える"
+                    : "例: 来週の打ち合わせの日程を相談したい"
+              }
             />
             <div className="flex items-center gap-3">
               <label className="flex min-w-0 flex-1 items-center gap-2">

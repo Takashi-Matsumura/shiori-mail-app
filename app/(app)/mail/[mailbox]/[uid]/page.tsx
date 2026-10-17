@@ -7,6 +7,7 @@ import { DoneButton } from "@/components/done-button";
 import { TrashOneButton } from "@/components/trash-one-button";
 import { ReplyIcon } from "@/components/icons";
 import { MessageBody } from "@/components/message-body";
+import { MoreActions } from "@/components/more-actions";
 import { MarkSeen } from "@/components/mark-seen";
 import { requireAccount } from "@/lib/accounts";
 import type { Classification, ExtractedItem } from "@/lib/ai/prompts";
@@ -57,32 +58,39 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
         <div className="flex items-start justify-between gap-4">
           <h1 className="min-w-0 pt-2 text-xl font-semibold break-words">{message.subject || "(件名なし)"}</h1>
           <MarkSeen key={message.id} mailbox={box.slug} uid={message.uid} seen={message.seen === 1} />
-          <AssistButton
-            key={`ai-${message.id}`}
-            messageId={message.id}
-            threadSize={thread.length}
-            summary={ai.summary ? { text: ai.summary.result, meta: meta(ai.summary)! } : null}
-            threadSummary={ai.thread_summary ? { text: ai.thread_summary.result, meta: meta(ai.thread_summary)! } : null}
-            classification={ai.classify ? { value: parseResult<Classification>(ai.classify), meta: meta(ai.classify)! } : null}
-            classificationLabeled={ai.classify?.model === USER_LABEL_MODEL}
-            extraction={ai.extract ? { items: parseResult<{ items: ExtractedItem[] }>(ai.extract)?.items ?? [], meta: meta(ai.extract)! } : null}
-          />
-          {box.slug === "inbox" ? (
-            <>
-              <TrashOneButton key={`trash-${message.id}`} uid={message.uid} />
-              <DoneButton key={`done-${message.id}`} messageId={message.id} done={handled.done} replied={handled.replied} />
-            </>
-          ) : null}
-          <div className="flex shrink-0 flex-col items-center gap-1">
-            <Link href={`/compose?reply=${message.id}`} aria-label="返信" title="返信" className={aquaClass("solid", "md")}>
-              <span className="flex items-center justify-center">
-                <ReplyIcon />
+          <div className="flex shrink-0 items-start gap-4">
+            {/* 整理: 栞に聞く・捨てる・済ませる */}
+            <AssistButton
+              key={`ai-${message.id}`}
+              messageId={message.id}
+              threadSize={thread.length}
+              summary={ai.summary ? { text: ai.summary.result, meta: meta(ai.summary)! } : null}
+              threadSummary={ai.thread_summary ? { text: ai.thread_summary.result, meta: meta(ai.thread_summary)! } : null}
+              classification={ai.classify ? { value: parseResult<Classification>(ai.classify), meta: meta(ai.classify)! } : null}
+              classificationLabeled={ai.classify?.model === USER_LABEL_MODEL}
+              extraction={ai.extract ? { items: parseResult<{ items: ExtractedItem[] }>(ai.extract)?.items ?? [], meta: meta(ai.extract)! } : null}
+            />
+            {box.slug === "inbox" ? (
+              <>
+                <TrashOneButton key={`trash-${message.id}`} uid={message.uid} />
+                <DoneButton key={`done-${message.id}`} messageId={message.id} done={handled.done} replied={handled.replied} />
+              </>
+            ) : null}
+            {/* 整理と応答の区切り。ボタンの高さ(下の名前は除く)に合わせる */}
+            <span aria-hidden="true" className="mx-1 mt-1.5 h-10 w-px bg-line" />
+            {/* 応答: ふだんは返信。転送のようにたまにしか使わないものは「…」にしまう */}
+            <div className="flex shrink-0 flex-col items-center gap-1">
+              <Link href={`/compose?reply=${message.id}`} aria-label="返信" title="返信" className={aquaClass("solid", "md")}>
+                <span className="flex items-center justify-center">
+                  <ReplyIcon />
+                </span>
+              </Link>
+              {/* ほかのボタンと同じく、下に名前を出す(読み上げは aria-label で伝わるので、こちらは読ませない) */}
+              <span aria-hidden="true" className="text-[11px] text-muted">
+                返信
               </span>
-            </Link>
-            {/* ほかのボタンと同じく、下に名前を出す(読み上げは aria-label で伝わるので、こちらは読ませない) */}
-            <span aria-hidden="true" className="text-[11px] text-muted">
-              返信
-            </span>
+            </div>
+            <MoreActions key={`more-${message.id}`} messageId={message.id} />
           </div>
         </div>
         <dl className="grid grid-cols-[4rem_1fr] gap-x-2 gap-y-1 rounded-xl border border-line bg-panel px-3.5 py-3 text-muted">
