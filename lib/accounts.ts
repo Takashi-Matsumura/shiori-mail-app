@@ -1,6 +1,7 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import { getSetting } from "@/lib/db";
+import { DEMO } from "@/lib/demo";
 import { readPassword } from "@/lib/keychain";
 
 /** DB 上の識別子。以前はテストサーバ("local")と区別していた名残で "real" のまま */
@@ -71,6 +72,8 @@ export function getRealAccountFields(): RealAccountFields {
 
 /** パスワードはキーチェーンを優先し、無ければ .env.local の REAL_MAIL_PASSWORD を使う。 */
 export function getRealPassword(): string | null {
+  // デモ用のデータで動かしているときは、本物のパスワード(キーチェーン)を読まない
+  if (DEMO) return "demo";
   return readPassword() ?? (process.env.REAL_MAIL_PASSWORD || null);
 }
 

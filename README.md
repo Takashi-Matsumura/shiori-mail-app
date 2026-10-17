@@ -123,6 +123,7 @@ Gmail の例:
 |---|---|
 | `npm run dev` | 開発サーバを起動する(127.0.0.1 でだけ待ち受け) |
 | `npm run ai:eval` | 仕分けの精度を測る(DB には書き込みません) |
+| `npm run demo:seed` / `npm run demo:dev` | 架空のメールを入れたデモ用のデータ(`data-demo/`)を作り、それで起動する。スクリーンショット用で、メールサーバには接続しない |
 | `npm run auth:reset` | パスキーとログイン中のセッションをすべて消す(パスキーを失くしたときの復旧用。次に開くと登録からやり直し) |
 | `npm run typecheck` / `npm run lint` | 型チェックと lint |
 
