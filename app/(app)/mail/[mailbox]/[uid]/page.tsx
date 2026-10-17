@@ -115,6 +115,8 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
       <MessageBody
         key={`body-${message.id}`}
         messageId={message.id}
+        senderAddr={message.from_addr}
+        spam={parseResult<Classification>(ai.classify)?.category === "迷惑"}
         text={message.text}
         html={message.html}
         size={bytes(message.size)}

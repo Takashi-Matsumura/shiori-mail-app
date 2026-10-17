@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, validateSession } from "@/lib/auth/session";
 
-// ログインしていなくても開ける入口。パスキーの API は、それぞれの中で登録の可否などを確かめる
-const PUBLIC_PATHS = new Set(["/login", "/api/auth/login", "/api/auth/register", "/api/auth/logout"]);
+// ログインしていなくても開ける入口。パスキーの API は、それぞれの中で登録の可否などを確かめる。
+// /link はメールのリンクを開く前の確認ページ。メールの iframe から開くタブにはログインの Cookie が付かないので入口に含める(メールのデータは読まない)
+const PUBLIC_PATHS = new Set(["/login", "/link", "/api/auth/login", "/api/auth/register", "/api/auth/logout"]);
 // localhost 以外の名前で届いたリクエストは断る。悪意あるサイトの DNS リバインディングで、localhost のこのアプリを読まれないように
 const LOOPBACK_ALIASES = new Set(["127.0.0.1", "[::1]"]);
 
