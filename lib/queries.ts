@@ -3,7 +3,7 @@ import { io } from "next/cache";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { getDb } from "@/lib/db";
 import type { MailboxSlug } from "@/lib/mail/imap";
-import type { Classification, ExtractedItem } from "@/lib/ai/prompts";
+import { CLOSURE_CATEGORIES, type Classification, type Closure, type ExtractedItem } from "@/lib/ai/prompts";
 
 // node:sqlite は同期ドライバなので、読み取りの前に io() を待って
 // 「リクエスト時に読むデータ」であることを Next.js に伝える(Cache Components)。
@@ -45,6 +45,8 @@ export type ListItem = {
   snippet: string;
   thread_size: number;
   classification: Classification | null;
+  /** やり取りが終わっていそうかの、栞の判断 */
+  closure: Closure | null;
   /** 同じスレッドで、このメールより後に自分が送ったメールがある */
   replied: number;
   /** このメールか、同じスレッドでこれより後のメールを「完了」にした */
@@ -76,6 +78,16 @@ const REPLIED_SQL = `EXISTS (SELECT 1 FROM messages s WHERE m.thread_key IS NOT 
 const DONE_SQL = `EXISTS (SELECT 1 FROM message_done d JOIN messages t ON t.id = d.message_id WHERE t.id = m.id
   OR (m.thread_key IS NOT NULL AND t.account = m.account AND t.thread_key = m.thread_key AND t.date >= m.date))`;
 
+/**
+ * やり取りが終わっていそうかを、まだ判断していないメール(messages m)。
+ * 受信トレイで、対応の要りうる仕分け(要返信・予定・請求・手続き)で、返信済みでも完了でもないもの
+ */
+export const CLOSURE_PENDING_SQL = `m.mailbox = 'inbox'
+  AND (SELECT json_extract(result, '$.category') FROM ai_results c WHERE c.message_id = m.id AND c.kind = 'classify')
+      IN (${CLOSURE_CATEGORIES.map((c) => `'${c}'`).join(", ")})
+  AND NOT EXISTS (SELECT 1 FROM ai_results x WHERE x.message_id = m.id AND x.kind = 'closure')
+  AND NOT (${REPLIED_SQL}) AND NOT (${DONE_SQL})`;
+
 export async function listMessages(account: string, mailbox: MailboxSlug): Promise<ListItem[]> {
   await io();
   const rows = getDb()
@@ -84,12 +96,13 @@ export async function listMessages(account: string, mailbox: MailboxSlug): Promi
               substr(m.text, 1, 140) AS snippet,
               (SELECT COUNT(*) FROM messages t WHERE t.account = m.account AND t.thread_key = m.thread_key) AS thread_size,
               (SELECT result FROM ai_results a WHERE a.message_id = m.id AND a.kind = 'classify') AS classification,
+              (SELECT result FROM ai_results a WHERE a.message_id = m.id AND a.kind = 'closure') AS closure,
               ${REPLIED_SQL} AS replied,
               ${DONE_SQL} AS done
        FROM messages m WHERE m.account = ? AND m.mailbox = ? ORDER BY m.date DESC`,
     )
-    .all(account, mailbox) as (Omit<ListItem, "classification"> & { classification: string | null })[];
-  return rows.map((r) => ({ ...r, classification: parseJson<Classification>(r.classification) }));
+    .all(account, mailbox) as (Omit<ListItem, "classification" | "closure"> & { classification: string | null; closure: string | null })[];
+  return rows.map((r) => ({ ...r, classification: parseJson<Classification>(r.classification), closure: parseJson<Closure>(r.closure) }));
 }
 
 export async function getMessage(account: string, mailbox: MailboxSlug, uid: number): Promise<MessageRow | null> {
@@ -254,7 +267,7 @@ export async function listTasks(account: string): Promise<{ tasks: TaskRow[]; pe
   return { tasks, pending: total - rows.length, done: rows.length };
 }
 
-export type PendingCounts = { classify: number; extract: number; embed: number };
+export type PendingCounts = { classify: number; extract: number; embed: number; closure: number };
 
 export async function getPendingCounts(account: string): Promise<PendingCounts> {
   await io();
@@ -272,6 +285,7 @@ export async function getPendingCounts(account: string): Promise<PendingCounts> 
     embed: count(
       "SELECT COUNT(*) AS n FROM messages m WHERE m.account = ? AND NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.message_id = m.id)",
     ),
+    closure: count(`SELECT COUNT(*) AS n FROM messages m WHERE m.account = ? AND ${CLOSURE_PENDING_SQL}`),
   };
 }
 
