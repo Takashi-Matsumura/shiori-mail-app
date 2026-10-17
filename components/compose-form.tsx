@@ -31,7 +31,7 @@ export type ReplyContextData = { messageId: number; summary: string | null; item
 
 type Props = {
   /** quote は本文の下にたたんで見せる引用(返信)か転送するメール。送るときにサーバが本文の末尾へ付ける */
-  defaults: { to: string; cc: string; subject: string; body: string; quote: string; inReplyTo: string; references: string; includeQuote: boolean };
+  defaults: { to: string; cc: string; bcc: string; subject: string; body: string; quote: string; inReplyTo: string; references: string; includeQuote: boolean };
   replyTo: { id: number; subject: string; from: string } | null;
   forward: ForwardSource | null;
   replyContext: ReplyContextData | null;
@@ -44,6 +44,9 @@ type Props = {
   savedDraft: ComposeDraft | null;
 };
 
+/** 宛先の横の「Cc」「Bcc」(欄を出すボタン) */
+const addFieldClass = "shrink-0 rounded-md border border-line px-2 py-1.5 text-xs text-muted hover:bg-panel hover:text-foreground";
+
 const inputClass = "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 focus:border-accent focus:outline-none";
 
 export function ComposeForm({ defaults, replyTo, forward, replyContext, account, contacts, draftKind, savedDraft, returnTo }: Props) {
@@ -51,6 +54,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
   const { notify } = useNotices();
   const [to, setTo] = useState(defaults.to);
   const [cc, setCc] = useState(defaults.cc);
+  const [bcc, setBcc] = useState(defaults.bcc);
   const [subject, setSubject] = useState(defaults.subject);
   const [body, setBody] = useState(defaults.body);
   // 返信の引用は外せる。転送するメールは転送そのものなので、いつも付ける
@@ -84,12 +88,13 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
   };
   // Cc はたまにしか使わないので、入っているときと、「Cc」を押したときだけ出す
   const [showCc, setShowCc] = useState(defaults.cc !== "");
+  const [showBcc, setShowBcc] = useState(defaults.bcc !== "");
   // 書きかけの自動保存(このブラウザに保存)。開いたときに前回の書きかけがあれば、戻すかを聞く
   const initial = useMemo(
-    () => ({ to: defaults.to, cc: defaults.cc, subject: defaults.subject, body: defaults.body, includeQuote: defaults.includeQuote }),
+    () => ({ to: defaults.to, cc: defaults.cc, bcc: defaults.bcc, subject: defaults.subject, body: defaults.body, includeQuote: defaults.includeQuote }),
     [defaults],
   );
-  const draft = useComposeDraft(draftKind, savedDraft, { to, cc, subject, body, includeQuote }, initial);
+  const draft = useComposeDraft(draftKind, savedDraft, { to, cc, bcc, subject, body, includeQuote }, initial);
   // 新規作成の書きかけの名前を URL に残す。自動同期などで画面が描き直されても、同じ書きかけのまま書き続けられるように
   useEffect(() => {
     if (!draftKind.startsWith("new")) return;
@@ -103,6 +108,8 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
     setTo(draft.saved.to);
     setCc(draft.saved.cc);
     setShowCc(draft.saved.cc !== "");
+    setBcc(draft.saved.bcc);
+    setShowBcc(draft.saved.bcc !== "");
     setSubject(draft.saved.subject);
     setBody(draft.saved.body);
     setIncludeQuote(draft.saved.includeQuote);
@@ -162,7 +169,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
 
   const cancel = () => {
     const edited =
-      to !== defaults.to || cc !== defaults.cc || subject !== defaults.subject || body !== defaults.body || includeQuote !== defaults.includeQuote;
+      to !== defaults.to || cc !== defaults.cc || bcc !== defaults.bcc || subject !== defaults.subject || body !== defaults.body || includeQuote !== defaults.includeQuote;
     if (edited && !window.confirm("書きかけの内容を破棄して戻りますか？")) return;
     if (edited) draft.discard();
     ai.stop();
@@ -215,6 +222,12 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
                   <div>
                     <dt className="text-muted">Cc</dt>
                     <dd className="break-all font-medium">{cc}</dd>
+                  </div>
+                ) : null}
+                {bcc ? (
+                  <div>
+                    <dt className="text-muted">Bcc(ほかの宛先には見えません)</dt>
+                    <dd className="break-all font-medium">{bcc}</dd>
                   </div>
                 ) : null}
               </dl>
@@ -349,14 +362,19 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
               />
             </div>
             {showCc ? null : (
+              <button type="button" onClick={() => setShowCc(true)} aria-label="Cc を追加" title="Cc を追加" className={addFieldClass}>
+                Cc
+              </button>
+            )}
+            {showBcc ? null : (
               <button
                 type="button"
-                onClick={() => setShowCc(true)}
-                aria-label="Cc を追加"
-                title="Cc を追加"
-                className="shrink-0 rounded-md border border-line px-2 py-1.5 text-xs text-muted hover:bg-panel hover:text-foreground"
+                onClick={() => setShowBcc(true)}
+                aria-label="Bcc を追加"
+                title="Bcc を追加(ほかの宛先に見えない送り先)"
+                className={addFieldClass}
               >
-                Cc
+                Bcc
               </button>
             )}
           </div>
@@ -379,6 +397,27 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
             </>
           ) : (
             <input type="hidden" name="cc" value="" />
+          )}
+          {showBcc ? (
+            <>
+              <label htmlFor="bcc" className="text-muted" title="ほかの宛先には見えない送り先">
+                Bcc
+              </label>
+              <AddressInput
+                id="bcc"
+                name="bcc"
+                value={bcc}
+                onChange={(v) => {
+                  setBcc(v);
+                  unconfirm();
+                }}
+                contacts={contacts}
+                className={inputClass}
+                autoFocus={defaults.bcc === ""}
+              />
+            </>
+          ) : (
+            <input type="hidden" name="bcc" value="" />
           )}
           <label htmlFor="subject" className="text-muted">件名</label>
           <input id="subject" name="subject" value={subject} onChange={(e) => {

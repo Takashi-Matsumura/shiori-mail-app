@@ -81,6 +81,7 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
   const field = (name: string) => String(formData.get(name) ?? "");
   const to = parseAddressList(field("to"));
   const cc = parseAddressList(field("cc"));
+  const bcc = parseAddressList(field("bcc"));
   const subject = field("subject").trim();
   // 引用(返信)と転送するメールは本文欄の外にあるので、ここで本文の末尾へ付ける
   const quote = field("quote").replace(/\r\n?/g, "\n");
@@ -88,6 +89,7 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
   const text = [body.trim() ? body : "", quote].filter(Boolean).join("\n\n");
   if (!to || to.length === 0) return { ok: false, message: "宛先のメールアドレスを確認してください(複数ならカンマ区切り)。" };
   if (!cc) return { ok: false, message: "Cc のメールアドレスを確認してください。" };
+  if (!bcc) return { ok: false, message: "Bcc のメールアドレスを確認してください。" };
   if (!subject || /[\r\n]/.test(subject)) return { ok: false, message: "件名を入力してください。" };
   if (!text.trim()) return { ok: false, message: "本文を入力してください。" };
 
@@ -143,6 +145,7 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
     result = await sendMail(account, {
       to: to.join(", "),
       cc: cc.join(", "),
+      bcc: bcc.join(", "),
       subject,
       text,
       inReplyTo: inReplyTo && !/[\r\n]/.test(inReplyTo) ? inReplyTo : undefined,

@@ -40,13 +40,15 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
   const signature = getSignature();
   // 本文欄には自分の文章と署名だけを置く。引用・転送するメールは本文欄の下にたたんで見せ、送るときにサーバが末尾へ付ける
   const body = signature ? `\n\n${signature}` : "";
-  let defaults = { to: "", cc: "", subject: "", body, quote: "", inReplyTo: "", references: "[]", includeQuote: true };
+  let defaults = { to: "", cc: "",
+      bcc: "", subject: "", body, quote: "", inReplyTo: "", references: "[]", includeQuote: true };
   if (original) {
     const refs: string[] = original.refs ? JSON.parse(original.refs) : [];
     const quoted = tidy(original.text).split("\n").map((l) => (l ? `> ${l}` : ">")).join("\n");
     defaults = {
       to: original.from_addr,
       cc: "",
+      bcc: "",
       subject: /^re:/i.test(original.subject) ? original.subject : `Re: ${original.subject}`,
       body,
       quote: `${fullDate(original.date)} ${original.from_name || original.from_addr}:\n${quoted}`,
@@ -83,6 +85,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
     defaults = {
       to: "",
       cc: "",
+      bcc: "",
       subject: /^(fwd?|転送):/i.test(forwarded.subject) ? forwarded.subject : `Fwd: ${forwarded.subject}`,
       body,
       quote: `${header}\n\n${tidy(forwarded.text)}`,
@@ -117,7 +120,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
   // 下書きの一覧から開いたときは、聞かずにそのまま書きかけを入れる
   const openSaved = saved !== null && requested === draftKind;
   if (saved && openSaved) {
-    defaults = { ...defaults, to: saved.to, cc: saved.cc, subject: saved.subject, body: saved.body, includeQuote: saved.includeQuote };
+    defaults = { ...defaults, to: saved.to, cc: saved.cc, bcc: saved.bcc, subject: saved.subject, body: saved.body, includeQuote: saved.includeQuote };
   }
   return (
     <ComposeForm
