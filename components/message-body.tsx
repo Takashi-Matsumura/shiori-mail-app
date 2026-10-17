@@ -6,6 +6,10 @@ import { isPreviewable } from "@/lib/mail/attachment-types";
 
 type Props = {
   messageId: number;
+  /** リンクを開く前の確認ページで、差出人とリンク先のドメインを比べるのに使う */
+  senderAddr: string;
+  /** 栞が「迷惑」に仕分けたメールか。確認ページで強く注意する */
+  spam: boolean;
   text: string;
   html: string | null;
   size: string;
@@ -25,9 +29,10 @@ export function MessageBody({ size, ...props }: Props) {
 /**
  * HTML メールを表示用に無害化する。DOMParser は解析するだけで、スクリプトの実行も画像の取得もしない。
  * - 動作や通信の起点になる要素(script / meta / link / form など)と on* 属性を取り除く
- * - リンクは飛び先を title に残して href を外す(クリックで iframe ごと外部サイトへ移動させない)
+ * - http / https のリンクは、確認ページ(/link)を新しいタブで開くように書き換える。外部サイトへ直接は飛ばさない
+ * - それ以外のリンク(javascript: や mailto: など)は、飛び先を title に残して href を外す
  */
-function sanitizeHtml(html: string): { body: string; remoteImages: number } {
+function sanitizeHtml(html: string, linkFor: (url: string, text: string) => string): { body: string; remoteImages: number } {
   const doc = new DOMParser().parseFromString(html, "text/html");
   doc.querySelectorAll("script, meta, link, base, form, iframe, frame, object, embed, svg, math, noscript, template").forEach((el) => el.remove());
   let remoteImages = 0;
@@ -36,12 +41,17 @@ function sanitizeHtml(html: string): { body: string; remoteImages: number } {
       const name = attr.name.toLowerCase();
       if (name.startsWith("on") || name === "srcdoc" || name === "formaction" || name === "ping") el.removeAttribute(attr.name);
     }
+    el.removeAttribute("target");
     const href = el.getAttribute("href");
     if (href !== null) {
       el.removeAttribute("href");
       el.setAttribute("title", href);
+      if (el.tagName === "A" && /^\s*https?:\/\//i.test(href)) {
+        el.setAttribute("href", linkFor(href.trim(), el.textContent ?? ""));
+        el.setAttribute("target", "_blank");
+        el.setAttribute("rel", "noopener noreferrer");
+      }
     }
-    el.removeAttribute("target");
     if (el.tagName === "IMG" && !/^\s*(data|cid):/i.test(el.getAttribute("src") ?? "")) remoteImages++;
   }
   const styles = [...doc.querySelectorAll("style")].map((s) => s.outerHTML).join("");
@@ -50,13 +60,24 @@ function sanitizeHtml(html: string): { body: string; remoteImages: number } {
 
 const noop = () => () => {};
 
-function Body({ messageId, text, html, attachments }: Omit<Props, "size">) {
+function Body({ messageId, senderAddr, spam, text, html, attachments }: Omit<Props, "size">) {
   const [mode, setMode] = useState<"text" | "html">(html ? "html" : "text");
   const [allowImages, setAllowImages] = useState(false);
   // 無害化に使う DOMParser はブラウザにしか無い。サーバでの描画(と、それに合わせる最初の描画)では解析せず、
   // 本文の枠だけ出しておき、ブラウザで描き直すときに解析する
   const inBrowser = useSyncExternalStore(noop, () => true, () => false);
-  const clean = useMemo(() => (inBrowser && mode === "html" && html ? sanitizeHtml(html) : null), [inBrowser, mode, html]);
+  // リンクは確認ページを通して開く。HTML 本文は srcdoc の iframe なので、行き先は絶対 URL にしておく
+  const linkFor = useMemo(() => {
+    return (url: string, label: string) => {
+      const q = new URLSearchParams({ u: url, t: label.replace(/\s+/g, " ").trim().slice(0, 200), s: senderAddr });
+      if (spam) q.set("spam", "1");
+      return `${inBrowser ? window.location.origin : ""}/link?${q}`;
+    };
+  }, [inBrowser, senderAddr, spam]);
+  const clean = useMemo(
+    () => (inBrowser && mode === "html" && html ? sanitizeHtml(html, linkFor) : null),
+    [inBrowser, mode, html, linkFor],
+  );
   const remoteImages = clean?.remoteImages ?? 0;
   // 無害化に加えて、sandbox 付きの iframe と CSP で二重に閉じ込める。スクリプトは動かず、
   // 外部への通信(開封確認用の画像や CSS からの読み込み)も、許可するまで起きない。
@@ -86,7 +107,7 @@ function Body({ messageId, text, html, attachments }: Omit<Props, "size">) {
               外部画像 {remoteImages} 件を読み込む(読み込むと、開封したことが送信元に伝わります)
             </label>
           ) : null}
-          {mode === "html" ? <span className="text-muted">リンクとスクリプトは無効化しています(リンク先はマウスを重ねると表示)</span> : null}
+          {mode === "html" ? <span className="text-muted">リンクは、行き先を確かめる画面を通して開きます。スクリプトは動きません</span> : null}
         </div>
       ) : null}
       {mode === "html" && !clean ? (
@@ -95,13 +116,15 @@ function Body({ messageId, text, html, attachments }: Omit<Props, "size">) {
         <iframe
           key={String(allowImages)}
           title="HTML 本文"
-          sandbox=""
+          // スクリプトは動かさない(allow-scripts は付けない)。リンクで新しいタブ(確認ページ)を開くことだけ許す。
+          // escape は、開いたタブまで sandbox を引き継がせないため(確認ページは普通のページとして動かす)
+          sandbox="allow-popups allow-popups-to-escape-sandbox"
           referrerPolicy="no-referrer"
           srcDoc={srcDoc}
           className="h-[28rem] w-full rounded-lg border border-line bg-white"
         />
       ) : (
-        <div className="whitespace-pre-wrap break-words leading-relaxed">{text || "(本文なし)"}</div>
+        <div className="whitespace-pre-wrap break-words leading-relaxed">{text ? <LinkedText text={text} linkFor={linkFor} /> : "(本文なし)"}</div>
       )}
       {attachments.length > 0 ? (
         <ul className="flex flex-wrap gap-2 border-t border-line pt-3">
@@ -139,4 +162,26 @@ function Body({ messageId, text, html, attachments }: Omit<Props, "size">) {
       ) : null}
     </div>
   );
+}
+
+const URL_IN_TEXT = /https?:\/\/[^\s<>"'）」』】]+/g;
+
+/** テキスト本文の URL を、確認ページを通して開くリンクにする(文字列のまま組み立て、HTML としては解釈しない) */
+function LinkedText({ text, linkFor }: { text: string; linkFor: (url: string, text: string) => string }) {
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(URL_IN_TEXT)) {
+    // 文末の句読点や閉じ括弧は URL に含めない
+    const url = m[0].replace(/[.,;:!?)\]、。]+$/, "");
+    const start = m.index;
+    parts.push(text.slice(last, start));
+    parts.push(
+      <a key={start} href={linkFor(url, url)} target="_blank" rel="noopener noreferrer" className="break-all text-accent underline underline-offset-2">
+        {url}
+      </a>,
+    );
+    last = start + url.length;
+  }
+  parts.push(text.slice(last));
+  return <>{parts}</>;
 }
