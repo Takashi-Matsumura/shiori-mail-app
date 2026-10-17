@@ -33,6 +33,7 @@ type Props = {
   embedError: string | null;
   /** いま会話に使うサーバとモデル(「自動」なら一覧の先頭)。畳んだ欄に出す */
   inUse: { server: string; model: string };
+  signature: string;
 };
 
 const inputClass = "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 focus:border-accent focus:outline-none";
@@ -61,6 +62,7 @@ export function SettingsForm({
   chatError,
   embedError,
   inUse,
+  signature,
 }: Props) {
   // アドレスやサーバは人に見られたくない情報なので、設定済みなら畳んでおく。未設定なら入力できるよう開いておく
   const [accountOpen, setAccountOpen] = useState(account === null);
@@ -68,6 +70,7 @@ export function SettingsForm({
   // めったに変えないので畳んでおき、使っているサーバとモデルだけを見せる
   const [aiOpen, setAiOpen] = useState(false);
   const aiPanelId = useId();
+  const signatureId = useId();
   const [state, action, pending] = useActionState<ActionState, FormData>(async (prev, formData) => {
     const result = await saveSettingsAction(prev, formData);
     // 入力の誤りがある欄を、直せるように開く
@@ -338,6 +341,22 @@ export function SettingsForm({
             value={ai.embedModel}
             options={embedModels}
             info={HELP.embedModel}
+          />
+        </div>
+      </fieldset>
+
+      <fieldset className="flex flex-col gap-2 rounded-lg border border-line bg-panel p-5">
+        <legend className="px-1 font-semibold">メールの作成</legend>
+        <div className="flex flex-col gap-1.5">
+          <FieldLabel htmlFor={signatureId} label="署名" info={HELP.signature} />
+          <textarea
+            id={signatureId}
+            name="signature"
+            defaultValue={signature}
+            rows={5}
+            maxLength={2000}
+            placeholder={"山田 太郎\n株式会社〇〇 営業部\nyamada@example.com"}
+            className={`${inputClass} resize-y leading-relaxed`}
           />
         </div>
       </fieldset>

@@ -108,6 +108,75 @@ export async function getMessageById(account: string, id: number): Promise<Messa
   return row ?? null;
 }
 
+/** 宛先の候補。sent は自分が送った回数、received は相手から受け取った回数 */
+export type Contact = { address: string; name: string; sent: number; received: number };
+
+/** 返事を受け付けないアドレス(自動送信の差出人)。宛先の候補には出さない */
+const NO_REPLY = /^(no-?reply|do-?not-?reply|noreply|mailer-daemon|postmaster|bounces?)([-+._].*)?@|[-+._](no-?reply|noreply|bounces?)@/i;
+const BOUNCER = /^(mailer-daemon|postmaster)@/i;
+const ADDRESS_IN_TEXT = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+/** 「"名前" <addr>, addr2」の形の宛先欄を、名前とアドレスの組に分ける */
+export function parseAddressText(text: string): { name: string; address: string }[] {
+  const out: { name: string; address: string }[] = [];
+  const re = /(?:"([^"]*)"|([^",<]*?))\s*<([^<>\s]+@[^<>\s]+)>|([^\s<>,"]+@[^\s<>,"]+)/g;
+  for (const m of text.matchAll(re)) {
+    const address = (m[3] ?? m[4] ?? "").trim();
+    if (address) out.push({ name: (m[1] ?? m[2] ?? "").trim(), address });
+  }
+  return out;
+}
+
+/**
+ * 宛先の候補。次の 2 つから集める。
+ * - 送信済み: 自分が実際に送った宛先(To・Cc)
+ * - 受信: メールをくれた差出人。ただし宣伝・迷惑に仕分けたメールしか来ていない相手と、返事を受け付けない自動送信のアドレスは除く
+ * 送れなかった通知(MAILER-DAEMON など)に出てきたアドレスは、その相手からメールを受け取ったことがなければ除く(打ち間違いの宛先を候補に残さない)。
+ * よくやり取りする相手(送った回数を重く見る)、新しい相手の順に並べる。
+ */
+export async function listContacts(account: string, self: string): Promise<Contact[]> {
+  await io();
+  const db = getDb();
+  const map = new Map<string, Contact & { last: number }>();
+  const add = (address: string, name: string, kind: "sent" | "received", date: number) => {
+    const key = address.toLowerCase();
+    if (key === self.toLowerCase() || NO_REPLY.test(key)) return;
+    const c = map.get(key) ?? { address, name: "", sent: 0, received: 0, last: 0 };
+    c[kind] += 1;
+    if (name && (!c.name || date >= c.last)) c.name = name;
+    c.last = Math.max(c.last, date);
+    map.set(key, c);
+  };
+
+  const sent = db
+    .prepare("SELECT to_text, cc_text, date FROM messages WHERE account = ? AND mailbox = 'sent'")
+    .all(account) as { to_text: string; cc_text: string; date: number }[];
+  for (const r of sent) {
+    for (const a of parseAddressText(`${r.to_text}, ${r.cc_text}`)) add(a.address, a.name, "sent", r.date);
+  }
+
+  const received = db
+    .prepare(
+      `SELECT m.from_name, m.from_addr, m.date, m.text,
+              (SELECT json_extract(result, '$.category') FROM ai_results a WHERE a.message_id = m.id AND a.kind = 'classify') AS category
+       FROM messages m WHERE m.account = ? AND m.mailbox = 'inbox'`,
+    )
+    .all(account) as { from_name: string; from_addr: string; date: number; text: string; category: string | null }[];
+  const bounced = new Set<string>();
+  for (const r of received) {
+    if (BOUNCER.test(r.from_addr)) {
+      for (const a of r.text.match(ADDRESS_IN_TEXT) ?? []) bounced.add(a.toLowerCase());
+      continue;
+    }
+    if (r.from_addr && r.category !== "宣伝" && r.category !== "迷惑") add(r.from_addr, r.from_name, "received", r.date);
+  }
+
+  return [...map.values()]
+    .filter((c) => !(bounced.has(c.address.toLowerCase()) && c.received === 0))
+    .sort((a, b) => b.sent * 3 + b.received - (a.sent * 3 + a.received) || b.last - a.last)
+    .map(({ address, name, sent, received }) => ({ address, name, sent, received }));
+}
+
 /** 同じスレッドのメールを、受信・送信済みをまたいで古い順に返す。 */
 export async function getThread(account: string, threadKey: string | null): Promise<MessageRow[]> {
   await io();

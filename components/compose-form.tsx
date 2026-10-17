@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useState } from "react";
+import { useActionState, useId, useState } from "react";
 import { sendAction, type SendState } from "@/app/actions";
 import { AiMeta } from "@/components/ai-meta";
+import { AddressInput, type ContactOption } from "@/components/address-input";
 import { AquaButton } from "@/components/aqua-button";
+import { DisclosureButton } from "@/components/disclosure-button";
 import { SendReview } from "@/components/send-review";
 import { CheckIcon, CloseIcon, PaperclipIcon, SentIcon, SparkleIcon } from "@/components/icons";
 import { TONES } from "@/lib/ai/prompts";
@@ -21,15 +23,17 @@ export type ForwardSource = {
 };
 
 type Props = {
-  defaults: { to: string; cc: string; subject: string; body: string; inReplyTo: string; references: string };
+  /** quote は本文の下にたたんで見せる引用(返信)か転送するメール。送るときにサーバが本文の末尾へ付ける */
+  defaults: { to: string; cc: string; subject: string; body: string; quote: string; inReplyTo: string; references: string };
   replyTo: { id: number; subject: string; from: string } | null;
   forward: ForwardSource | null;
   account: { email: string; name: string; readOnly: boolean };
+  contacts: ContactOption[];
 };
 
 const inputClass = "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 focus:border-accent focus:outline-none";
 
-export function ComposeForm({ defaults, replyTo, forward, account }: Props) {
+export function ComposeForm({ defaults, replyTo, forward, account, contacts }: Props) {
   const router = useRouter();
   const { notify } = useNotices();
   // 送れたら、結果はヘッダーのお知らせで伝えて一覧へ戻る。遷移もアクションの中で行い、戻るまで「送信中…」のままにする。
@@ -54,6 +58,10 @@ export function ComposeForm({ defaults, replyTo, forward, account }: Props) {
   const [cc, setCc] = useState(defaults.cc);
   const [subject, setSubject] = useState(defaults.subject);
   const [body, setBody] = useState(defaults.body);
+  // 返信の引用は外せる。転送するメールは転送そのものなので、いつも付ける
+  const [includeQuote, setIncludeQuote] = useState(true);
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const quoteId = useId();
   // 送信前の確認。チェックを入れたら栞が見直す。どこかを書き換えたら、確認し直してもらうために外す。
   const [confirmed, setConfirmed] = useState(false);
   // 見直しの終わりを待たずに送ることにしたか
@@ -78,7 +86,8 @@ export function ComposeForm({ defaults, replyTo, forward, account }: Props) {
   };
 
   const cancel = () => {
-    const edited = to !== defaults.to || cc !== defaults.cc || subject !== defaults.subject || body !== defaults.body;
+    const edited =
+      to !== defaults.to || cc !== defaults.cc || subject !== defaults.subject || body !== defaults.body || !includeQuote;
     if (edited && !window.confirm("書きかけの内容を破棄して戻りますか？")) return;
     ai.stop();
     // 開いてきた画面(一覧や返信元のメール)へ戻す。URL を直接開いたときは戻り先がないので受信トレイへ。
@@ -217,15 +226,32 @@ export function ComposeForm({ defaults, replyTo, forward, account }: Props) {
           <span className="text-muted">差出人</span>
           <span>{account.name ? `${account.name} <${account.email}>` : account.email}</span>
           <label htmlFor="to" className="text-muted">宛先</label>
-          <input id="to" name="to" value={to} onChange={(e) => {
-              setTo(e.target.value);
+          {/* 返信は宛先が決まっているので本文から、新規作成と転送は宛先から書き始める */}
+          <AddressInput
+            id="to"
+            name="to"
+            value={to}
+            onChange={(v) => {
+              setTo(v);
               unconfirm();
-            }} className={inputClass} placeholder="someone@example.com" autoComplete="off" />
+            }}
+            contacts={contacts}
+            className={inputClass}
+            placeholder="someone@example.com"
+            autoFocus={!replyTo}
+          />
           <label htmlFor="cc" className="text-muted">Cc</label>
-          <input id="cc" name="cc" value={cc} onChange={(e) => {
-              setCc(e.target.value);
+          <AddressInput
+            id="cc"
+            name="cc"
+            value={cc}
+            onChange={(v) => {
+              setCc(v);
               unconfirm();
-            }} className={inputClass} autoComplete="off" />
+            }}
+            contacts={contacts}
+            className={inputClass}
+          />
           <label htmlFor="subject" className="text-muted">件名</label>
           <input id="subject" name="subject" value={subject} onChange={(e) => {
               setSubject(e.target.value);
@@ -262,8 +288,42 @@ export function ComposeForm({ defaults, replyTo, forward, account }: Props) {
             unconfirm();
           }}
           rows={16}
+          autoFocus={!!replyTo}
           className={`${inputClass} flex-1 font-mono leading-relaxed`}
         />
+        {defaults.quote ? (
+          <div className="flex flex-col gap-2 rounded-xl border border-line bg-panel px-3.5 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              {forward ? (
+                <span className="text-muted">転送するメール(本文の下に付けます)</span>
+              ) : (
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={includeQuote}
+                    onChange={(e) => {
+                      setIncludeQuote(e.target.checked);
+                      unconfirm();
+                    }}
+                    className="accent-accent"
+                  />
+                  <span className={includeQuote ? "" : "text-muted"}>元のメールを引用する(本文の下に付けます)</span>
+                </label>
+              )}
+              <DisclosureButton open={quoteOpen} onToggle={() => setQuoteOpen(!quoteOpen)} controls={quoteId} label={forward ? "転送するメール" : "引用"} />
+            </div>
+            {forward || includeQuote ? <input type="hidden" name="quote" value={defaults.quote} /> : null}
+            <pre
+              id={quoteId}
+              hidden={!quoteOpen}
+              className={`max-h-80 overflow-y-auto border-t border-line pt-2 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words ${
+                forward || includeQuote ? "text-muted" : "text-muted line-through opacity-60"
+              }`}
+            >
+              {defaults.quote}
+            </pre>
+          </div>
+        ) : null}
       </section>
 
       <section aria-label="栞" className="order-2 min-w-0 lg:order-3">
