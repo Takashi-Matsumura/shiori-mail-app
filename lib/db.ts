@@ -21,6 +21,11 @@ export function getDb(): DatabaseSync {
     chmodSync(file, 0o600);
     db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     db.exec(SCHEMA);
+    // 公開ホスト対応より前に作った DB には rp_id が無い。それまでのパスキーはすべて localhost のもの
+    const passkeyCols = db.prepare("PRAGMA table_info(passkeys)").all() as { name: string }[];
+    if (!passkeyCols.some((c) => c.name === "rp_id")) {
+      db.exec("ALTER TABLE passkeys ADD COLUMN rp_id TEXT NOT NULL DEFAULT 'localhost'");
+    }
     globalForDb.__mailerDb = db;
   }
   return globalForDb.__mailerDb;

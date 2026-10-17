@@ -1,8 +1,10 @@
 import { io } from "next/cache";
+import { headers } from "next/headers";
 import { Suspense } from "react";
 import { LoginForm } from "@/components/login-form";
 import { ShioriLogo } from "@/components/shiori-logo";
-import { hasPasskeys } from "@/lib/auth/passkey";
+import { hasPasskeys, isValidInvite } from "@/lib/auth/passkey";
+import { siteFor } from "@/lib/auth/site";
 
 export default function LoginPage({ searchParams }: PageProps<"/login">) {
   return (
@@ -22,8 +24,22 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
 
 async function Login({ searchParams }: Pick<PageProps<"/login">, "searchParams">) {
   await io();
-  const { next } = await searchParams;
-  return <LoginForm mode={hasPasskeys() ? "login" : "register"} next={safeNext(next)} />;
+  const { next, invite } = await searchParams;
+  const site = siteFor(await headers());
+  // proxy.ts が localhost と公開ホスト以外を断っているので、ここに来るのはそのどちらか
+  if (!site) return null;
+  const nextPath = safeNext(next);
+  if (typeof invite === "string" && isValidInvite(invite)) return <LoginForm mode="register" invite={invite} next={nextPath} />;
+  if (hasPasskeys(site.rpId)) return <LoginForm mode="login" next={nextPath} />;
+  // 公開ホストでの最初の 1 つは、招待でしか登録できない
+  if (site.rpId !== "localhost" || hasPasskeys()) {
+    return (
+      <p className="text-center text-muted">
+        この入口で使うパスキーがまだありません。Mac で <code>npm run auth:invite</code> を実行し、表示されたリンクから登録してください。
+      </p>
+    );
+  }
+  return <LoginForm mode="register" next={nextPath} />;
 }
 
 /**

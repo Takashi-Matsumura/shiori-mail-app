@@ -1,5 +1,5 @@
 import "server-only";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -8,22 +8,30 @@ import {
   type AuthenticationResponseJSON,
   type RegistrationResponseJSON,
 } from "@simplewebauthn/server";
+import type { Site } from "@/lib/auth/site";
 import { getDb, getSetting, setSetting } from "@/lib/db";
 
-// WebAuthn の RP ID には IP アドレスを使えないので、localhost で開く前提にする(proxy.ts が 127.0.0.1 から転送する)
-export const RP_ID = "localhost";
+// パスキーは RP ID(開いている名前)ごとに別物。localhost と公開ホストの分を、passkeys.rp_id で分けて持つ。
+// WebAuthn の RP ID には IP アドレスを使えないので、127.0.0.1 は proxy.ts が localhost へ移す
 const RP_NAME = "Shiori Mail";
 const CHALLENGE_TTL_MS = 5 * 60_000;
 
 type Kind = "register" | "login";
 type PasskeyRow = { id: string; public_key: Uint8Array; counter: number; transports: string | null };
 
-export function hasPasskeys(): boolean {
-  return Boolean(getDb().prepare("SELECT 1 FROM passkeys LIMIT 1").get());
+/** rpId を渡せばその名前のパスキーだけ、省けばどれか 1 つでもあるか */
+export function hasPasskeys(rpId?: string): boolean {
+  const db = getDb();
+  const row = rpId
+    ? db.prepare("SELECT 1 FROM passkeys WHERE rp_id = ? LIMIT 1").get(rpId)
+    : db.prepare("SELECT 1 FROM passkeys LIMIT 1").get();
+  return Boolean(row);
 }
 
-function listPasskeys(): PasskeyRow[] {
-  return getDb().prepare("SELECT id, public_key, counter, transports FROM passkeys").all() as PasskeyRow[];
+function listPasskeys(rpId: string): PasskeyRow[] {
+  return getDb()
+    .prepare("SELECT id, public_key, counter, transports FROM passkeys WHERE rp_id = ?")
+    .all(rpId) as PasskeyRow[];
 }
 
 const parseTransports = (t: string | null) => (t ? (JSON.parse(t) as string[]) : undefined);
@@ -56,13 +64,13 @@ function userId(): Uint8Array<ArrayBuffer> {
   return new Uint8Array(Buffer.from(id, "base64url"));
 }
 
-export async function registrationOptions() {
+export async function registrationOptions(site: Site) {
   const options = await generateRegistrationOptions({
     rpName: RP_NAME,
-    rpID: RP_ID,
+    rpID: site.rpId,
     userName: "Shiori Mail",
     userID: userId(),
-    excludeCredentials: listPasskeys().map((p) => ({ id: p.id, transports: parseTransports(p.transports) })),
+    excludeCredentials: listPasskeys(site.rpId).map((p) => ({ id: p.id, transports: parseTransports(p.transports) })),
     // Touch ID などで本人確認できるものに限る
     authenticatorSelection: { residentKey: "required", userVerification: "required" },
     preferredAuthenticatorType: "localDevice",
@@ -74,28 +82,31 @@ export async function registrationOptions() {
 /**
  * firstOnly は未ログインでの登録(初回)。検証を待つ間に別の登録が先に保存されることがあるので、
  * 「まだ 1 つも無いとき」の確認と保存を 1 つの INSERT で行い、すでにあれば保存しない。
+ * invite は招待での登録。検証が通ったときに使い切り、使えなければ保存しない。
  */
 export async function verifyRegistration(
   response: RegistrationResponseJSON,
-  origin: string,
-  { firstOnly }: { firstOnly: boolean },
+  site: Site,
+  { firstOnly, invite }: { firstOnly: boolean; invite?: string },
 ): Promise<boolean> {
   const { verified, registrationInfo } = await verifyRegistrationResponse({
     response,
     expectedChallenge: (c) => consumeChallenge(c, "register"),
-    expectedOrigin: origin,
-    expectedRPID: RP_ID,
+    expectedOrigin: site.origin,
+    expectedRPID: site.rpId,
     requireUserVerification: true,
   });
   if (!verified) return false;
+  if (invite !== undefined && !consumeInvite(invite)) return false;
   const { credential } = registrationInfo;
   const res = getDb()
     .prepare(
-      `INSERT INTO passkeys (id, public_key, counter, transports, created) SELECT ?, ?, ?, ?, ?
+      `INSERT INTO passkeys (id, rp_id, public_key, counter, transports, created) SELECT ?, ?, ?, ?, ?, ?
        WHERE ? = 0 OR NOT EXISTS (SELECT 1 FROM passkeys)`,
     )
     .run(
       credential.id,
+      site.rpId,
       credential.publicKey,
       credential.counter,
       credential.transports ? JSON.stringify(credential.transports) : null,
@@ -105,24 +116,24 @@ export async function verifyRegistration(
   return res.changes === 1;
 }
 
-export async function authenticationOptions() {
+export async function authenticationOptions(site: Site) {
   const options = await generateAuthenticationOptions({
-    rpID: RP_ID,
-    allowCredentials: listPasskeys().map((p) => ({ id: p.id, transports: parseTransports(p.transports) })),
+    rpID: site.rpId,
+    allowCredentials: listPasskeys(site.rpId).map((p) => ({ id: p.id, transports: parseTransports(p.transports) })),
     userVerification: "required",
   });
   saveChallenge(options.challenge, "login");
   return options;
 }
 
-export async function verifyAuthentication(response: AuthenticationResponseJSON, origin: string): Promise<boolean> {
-  const row = listPasskeys().find((p) => p.id === response.id);
+export async function verifyAuthentication(response: AuthenticationResponseJSON, site: Site): Promise<boolean> {
+  const row = listPasskeys(site.rpId).find((p) => p.id === response.id);
   if (!row) return false;
   const { verified, authenticationInfo } = await verifyAuthenticationResponse({
     response,
     expectedChallenge: (c) => consumeChallenge(c, "login"),
-    expectedOrigin: origin,
-    expectedRPID: RP_ID,
+    expectedOrigin: site.origin,
+    expectedRPID: site.rpId,
     credential: {
       id: row.id,
       publicKey: new Uint8Array(row.public_key),
@@ -136,4 +147,22 @@ export async function verifyAuthentication(response: AuthenticationResponseJSON,
     .prepare("UPDATE passkeys SET counter = ?, last_used = ? WHERE id = ?")
     .run(authenticationInfo.newCounter, Date.now(), row.id);
   return true;
+}
+
+// 招待。外から使う端末のパスキーを、ログインせずに 1 つだけ登録できる使い捨ての合言葉。
+// npm run auth:invite(この Mac のシェルを使える人だけ)が settings に「SHA-256:期限」で書く
+const INVITE_KEY = "passkey_invite";
+const inviteHash = (token: string) => createHash("sha256").update(token).digest("hex");
+
+/** 招待がまだ使えるか(消費はしない)。登録のオプションを返す前の確認に使う */
+export function isValidInvite(token: string): boolean {
+  const [hash, expires] = (getSetting(INVITE_KEY) ?? "").split(":");
+  return Boolean(hash) && hash === inviteHash(token) && Number(expires) >= Date.now();
+}
+
+/** 招待を使い切る。照合と削除を 1 つの DELETE で行うので、同じ招待で 2 つは登録できない */
+function consumeInvite(token: string): boolean {
+  const current = getSetting(INVITE_KEY);
+  if (!current || !isValidInvite(token)) return false;
+  return getDb().prepare("DELETE FROM settings WHERE key = ? AND value = ?").run(INVITE_KEY, current).changes === 1;
 }

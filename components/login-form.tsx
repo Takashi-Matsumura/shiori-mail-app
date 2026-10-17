@@ -9,8 +9,8 @@ async function post(path: string, body: unknown): Promise<Response> {
   return fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 }
 
-/** Touch ID(パスキー)で開く。パスキーがまだ無ければ、この Mac のパスキーを登録する。 */
-export function LoginForm({ mode, next }: { mode: Mode; next: string }) {
+/** Touch ID(パスキー)で開く。パスキーがまだ無ければ(または招待のリンクから開いたら)、この端末のパスキーを登録する。 */
+export function LoginForm({ mode, next, invite }: { mode: Mode; next: string; invite?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const path = mode === "login" ? "/api/auth/login" : "/api/auth/register";
@@ -19,12 +19,12 @@ export function LoginForm({ mode, next }: { mode: Mode; next: string }) {
     setBusy(true);
     setError(null);
     try {
-      const opt = await post(path, { step: "options" });
+      const opt = await post(path, { step: "options", invite });
       if (!opt.ok) throw new Error("サーバが応答しませんでした。");
       const optionsJSON = await opt.json();
       const response =
         mode === "login" ? await startAuthentication({ optionsJSON }) : await startRegistration({ optionsJSON });
-      const res = await post(path, { step: "verify", response });
+      const res = await post(path, { step: "verify", response, invite });
       const data = (await res.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
       if (!res.ok || !data?.ok) throw new Error(data?.message ?? "うまくいきませんでした。");
       // 画面の枠ごと読み直したいので、クライアント側の遷移ではなく再読み込みで移る
@@ -41,7 +41,9 @@ export function LoginForm({ mode, next }: { mode: Mode; next: string }) {
     <div className="flex w-full flex-col items-center gap-3">
       {mode === "register" ? (
         <p className="text-center text-muted">
-          最初に、この Mac のパスキーを登録します。次からは Touch ID でアプリを開けます。
+          {invite
+            ? "この端末のパスキーを登録します。次からは Face ID・Touch ID でアプリを開けます。"
+            : "最初に、この Mac のパスキーを登録します。次からは Touch ID でアプリを開けます。"}
         </p>
       ) : null}
       <button

@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS local_seen (
 -- アプリを開くためのパスキー。公開鍵だけを持ち、秘密鍵は Mac(iCloud キーチェーン)から出ない
 CREATE TABLE IF NOT EXISTS passkeys (
   id TEXT PRIMARY KEY,
+  rp_id TEXT NOT NULL DEFAULT 'localhost',
   public_key BLOB NOT NULL,
   counter INTEGER NOT NULL DEFAULT 0,
   transports TEXT,

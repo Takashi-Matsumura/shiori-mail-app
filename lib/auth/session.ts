@@ -48,13 +48,16 @@ export function deleteSession(token: string | undefined): void {
   if (token) getDb().prepare("DELETE FROM sessions WHERE token_hash = ?").run(hash(token));
 }
 
-export const sessionCookieOptions = {
-  httpOnly: true,
-  // 他サイトから辿ってきたリクエストには付けない(CSRF よけ)
-  sameSite: "strict",
-  path: "/",
-  maxAge: ABSOLUTE_MS / 1000,
-} as const;
+/** secure は公開ホスト(HTTPS)で開いているとき。localhost は HTTP なので付けない */
+export const sessionCookieOptions = (secure: boolean) =>
+  ({
+    httpOnly: true,
+    secure,
+    // 他サイトから辿ってきたリクエストには付けない(CSRF よけ)
+    sameSite: "strict",
+    path: "/",
+    maxAge: ABSOLUTE_MS / 1000,
+  }) as const;
 
 export async function isAuthenticated(): Promise<boolean> {
   return validateSession((await cookies()).get(SESSION_COOKIE)?.value);
