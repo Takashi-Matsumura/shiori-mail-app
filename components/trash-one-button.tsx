@@ -26,19 +26,21 @@ export function TrashOneButton({ uid }: { uid: number }) {
 
   return (
     <div className="flex shrink-0 flex-col items-center gap-1">
-      <AquaButton
-        type="button"
-        tone="glass"
-        size="md"
-        label="ゴミ箱へ移す"
-        disabled={pending}
-        onClick={() => {
-          setError(null);
-          setOpen(true);
-        }}
-      >
-        <TrashIcon />
-      </AquaButton>
+      <div className="flex h-13 items-center">
+        <AquaButton
+          type="button"
+          tone="glass"
+          size="sm"
+          label="ゴミ箱へ移す"
+          disabled={pending}
+          onClick={() => {
+            setError(null);
+            setOpen(true);
+          }}
+        >
+          <TrashIcon />
+        </AquaButton>
+      </div>
       <span className="text-[11px] text-muted">ゴミ箱へ</span>
       {open
         ? createPortal(

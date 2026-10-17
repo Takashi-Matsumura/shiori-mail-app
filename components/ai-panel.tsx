@@ -21,7 +21,7 @@ export type AiPanelProps = {
   extraction: Saved<{ items: ExtractedItem[] }>;
 };
 
-/** 栞のアシストの中身(要約・仕分け・予定の抜き出し)。メールの上部の「栞のアシスト」ボタンから開くパネルに出す */
+/** 栞のアシストの中身(要約・仕分け・予定の抜き出し)。メールの上部の「アシスト」ボタンから開くパネルに出す */
 export function AiPanel({ messageId, threadSize, summary, threadSummary, classification, classificationLabeled, extraction }: AiPanelProps) {
   return (
     <>
