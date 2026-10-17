@@ -14,6 +14,7 @@ import { TONES, type ExtractedItem, type SubjectResponse } from "@/lib/ai/prompt
 import { useNotices } from "@/lib/client/notices";
 import { useAiStream } from "@/lib/client/use-ai-stream";
 import { useComposeDraft } from "@/lib/client/use-compose-draft";
+import type { ComposeDraft } from "@/lib/drafts";
 import { fullDate } from "@/lib/format";
 import { useSendReview } from "@/lib/client/use-send-review";
 
@@ -35,11 +36,14 @@ type Props = {
   replyContext: ReplyContextData | null;
   account: { email: string; name: string; readOnly: boolean };
   contacts: ContactOption[];
+  /** draftKind の書きかけ(サーバに保存済みのもの)。無ければ null */
+  draftKind: string;
+  savedDraft: ComposeDraft | null;
 };
 
 const inputClass = "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 focus:border-accent focus:outline-none";
 
-export function ComposeForm({ defaults, replyTo, forward, replyContext, account, contacts }: Props) {
+export function ComposeForm({ defaults, replyTo, forward, replyContext, account, contacts, draftKind, savedDraft }: Props) {
   const router = useRouter();
   const { notify } = useNotices();
   const [to, setTo] = useState(defaults.to);
@@ -57,11 +61,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
     () => ({ to: defaults.to, cc: defaults.cc, subject: defaults.subject, body: defaults.body, includeQuote: true }),
     [defaults],
   );
-  const draft = useComposeDraft(
-    replyTo ? `reply-${replyTo.id}` : forward ? `forward-${forward.id}` : "new",
-    { to, cc, subject, body, includeQuote },
-    initial,
-  );
+  const draft = useComposeDraft(draftKind, savedDraft, { to, cc, subject, body, includeQuote }, initial);
   const restore = () => {
     if (!draft.saved) return;
     setTo(draft.saved.to);
@@ -74,7 +74,10 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
   };
   // 送れたら、結果はヘッダーのお知らせで伝えて一覧へ戻る。遷移もアクションの中で行い、戻るまで「送信中…」のままにする。
   const [state, action, pending] = useActionState<SendState, FormData>(async (prev, formData) => {
+    // 送っている間と送ったあとは書きかけを保存しない(送れた書きかけはサーバが消す)
+    draft.stop();
     const next = await sendAction(prev, formData);
+    if (!next?.ok) draft.resume();
     if (next?.ok) {
       const { rejected, appended } = next.result;
       const problems = [
@@ -86,7 +89,6 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
           ? { source: "send", kind: "error", text: `${next.to} へ送信しました。ただし${problems.join("。")}` }
           : { source: "send", kind: "info", text: `${next.to} へ送信しました` },
       );
-      draft.discard();
       router.push("/mail/inbox");
     }
     return next;
@@ -151,6 +153,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
       <input type="hidden" name="inReplyTo" value={defaults.inReplyTo} />
       <input type="hidden" name="references" value={defaults.references} />
       {forward ? <input type="hidden" name="forwardOf" value={forward.id} /> : null}
+      <input type="hidden" name="draftKind" value={draftKind} />
 
       <section aria-label="操作" className="order-3 flex flex-col gap-3 lg:order-1">
         <div className="flex flex-col gap-3 lg:sticky lg:top-0">
