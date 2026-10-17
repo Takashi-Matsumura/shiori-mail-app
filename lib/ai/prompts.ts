@@ -284,3 +284,44 @@ export function normalizeReviewIssues(v: unknown): ReviewIssue[] {
     .slice(0, 10)
     .map((i) => ({ severity: i.severity, message: i.message.slice(0, 200), quote: typeof i.quote === "string" ? i.quote.slice(0, 60) : "" }));
 }
+
+/** 新規作成で、書いた本文から件名の候補を考える(本文は利用者自身の下書き) */
+export function subjectPrompt(draft: { to: string; text: string }): ChatMessage[] {
+  const tag = newTag();
+  const body = draft.text.length > BODY_LIMIT ? draft.text.slice(0, BODY_LIMIT) + "\n(以下省略)" : draft.text;
+  return [
+    system(tag),
+    {
+      role: "user",
+      content: `利用者がこれから送るメールの本文です。このメールの件名の候補を 3 つ考えてください。
+- 受け取った人が、件名だけで用件が分かるようにする(例: 「10/20 打ち合わせの日程のご相談」)
+- 1 つあたり 30 文字程度まで。本文と同じ言語で書く
+- 3 つは言い回しや詳しさを変える。「Re:」「【】」や絵文字は付けない
+
+宛先: ${draft.to.replace(/[\r\n]+/g, " ").slice(0, 300)}
+<${tag}>
+${body.replaceAll(tag, "")}
+</${tag}>`,
+    },
+  ];
+}
+
+export type SubjectResponse = { subjects: string[]; error?: string };
+
+export const subjectSchema = {
+  type: "object",
+  properties: { subjects: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 3 } },
+  required: ["subjects"],
+  additionalProperties: false,
+} as const;
+
+/** AI の返した件名の候補を、画面に出せる形にそろえる(1 行・長すぎない・重複なし) */
+export function normalizeSubjects(value: unknown): string[] {
+  const list = (value as { subjects?: unknown } | null)?.subjects;
+  if (!Array.isArray(list)) return [];
+  const out = list
+    .filter((s): s is string => typeof s === "string")
+    .map((s) => s.replace(/[\r\n]+/g, " ").replace(/^(re|fwd?):\s*/i, "").trim().slice(0, 80))
+    .filter(Boolean);
+  return [...new Set(out)].slice(0, 3);
+}

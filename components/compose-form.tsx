@@ -1,15 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useId, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { sendAction, type SendState } from "@/app/actions";
 import { AiMeta } from "@/components/ai-meta";
 import { AddressInput, type ContactOption } from "@/components/address-input";
 import { AquaButton } from "@/components/aqua-button";
 import { DisclosureButton } from "@/components/disclosure-button";
+import { ReplyContext } from "@/components/reply-context";
 import { SendReview } from "@/components/send-review";
 import { CheckIcon, CloseIcon, PaperclipIcon, SentIcon, SparkleIcon } from "@/components/icons";
-import { TONES } from "@/lib/ai/prompts";
+import { TONES, type ExtractedItem, type SubjectResponse } from "@/lib/ai/prompts";
 import { useNotices } from "@/lib/client/notices";
 import { useAiStream } from "@/lib/client/use-ai-stream";
 import { useSendReview } from "@/lib/client/use-send-review";
@@ -22,18 +23,21 @@ export type ForwardSource = {
   attachments: { index: number; filename: string; size: string }[];
 };
 
+export type ReplyContextData = { messageId: number; summary: string | null; items: ExtractedItem[] | null };
+
 type Props = {
   /** quote は本文の下にたたんで見せる引用(返信)か転送するメール。送るときにサーバが本文の末尾へ付ける */
   defaults: { to: string; cc: string; subject: string; body: string; quote: string; inReplyTo: string; references: string };
   replyTo: { id: number; subject: string; from: string } | null;
   forward: ForwardSource | null;
+  replyContext: ReplyContextData | null;
   account: { email: string; name: string; readOnly: boolean };
   contacts: ContactOption[];
 };
 
 const inputClass = "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 focus:border-accent focus:outline-none";
 
-export function ComposeForm({ defaults, replyTo, forward, account, contacts }: Props) {
+export function ComposeForm({ defaults, replyTo, forward, replyContext, account, contacts }: Props) {
   const router = useRouter();
   const { notify } = useNotices();
   // 送れたら、結果はヘッダーのお知らせで伝えて一覧へ戻る。遷移もアクションの中で行い、戻るまで「送信中…」のままにする。
@@ -68,6 +72,11 @@ export function ComposeForm({ defaults, replyTo, forward, account, contacts }: P
   const [skipReview, setSkipReview] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [tone, setTone] = useState<string>(TONES[0]);
+  const subjects = useSubjectSuggestions();
+  // 件名の候補は新規作成でだけ出す(返信と転送は、元の件名から作ってある)
+  const ownText = defaults.body && body.endsWith(defaults.body) ? body.slice(0, -defaults.body.length) : body;
+  const canSuggest = !replyTo && !forward && !subject.trim() && ownText.trim().length >= SUBJECT_MIN_TEXT;
+  const suggestSubject = () => subjects.start({ to, text: ownText });
   const ai = useAiStream();
   const review = useSendReview();
   const reviewing = review.state.status === "running";
@@ -257,6 +266,21 @@ export function ComposeForm({ defaults, replyTo, forward, account, contacts }: P
               setSubject(e.target.value);
               unconfirm();
             }} className={inputClass} autoComplete="off" />
+          {canSuggest || subjects.state.status === "running" || (subjects.state.status === "done" && !subject.trim()) ? (
+            <>
+              <span aria-hidden="true" />
+              <SubjectSuggestions
+                state={subjects.state}
+                canSuggest={canSuggest}
+                onSuggest={suggestSubject}
+                onPick={(s) => {
+                  setSubject(s);
+                  subjects.reset();
+                  unconfirm();
+                }}
+              />
+            </>
+          ) : null}
           {forward && forward.attachments.length > 0 ? (
             <>
               <span className="self-start pt-1 text-muted">添付</span>
@@ -286,6 +310,10 @@ export function ComposeForm({ defaults, replyTo, forward, account, contacts }: P
           onChange={(e) => {
             setBody(e.target.value);
             unconfirm();
+          }}
+          // 件名が空のまま本文を書き終えたら、栞に件名を考えてもらう(同じ本文で何度も頼まない)
+          onBlur={() => {
+            if (canSuggest && subjects.requestedFor !== ownText.trim()) suggestSubject();
           }}
           rows={16}
           autoFocus={!!replyTo}
@@ -329,6 +357,7 @@ export function ComposeForm({ defaults, replyTo, forward, account, contacts }: P
       <section aria-label="栞" className="order-2 min-w-0 lg:order-3">
         <div className="flex flex-col gap-4 lg:sticky lg:top-0">
           <SendReview state={review.state} />
+          {replyContext ? <ReplyContext {...replyContext} /> : null}
           <fieldset className="flex flex-col gap-2.5 rounded-xl border border-line bg-panel p-3.5">
             <legend className="sr-only">栞に下書きを頼む</legend>
             <p aria-hidden="true" className="flex items-center gap-1.5 font-medium text-accent [&_svg]:size-4">
@@ -385,5 +414,88 @@ export function ComposeForm({ defaults, replyTo, forward, account, contacts }: P
         </div>
       </section>
     </form>
+  );
+}
+
+/** 件名の候補を頼むのは、本文がこの文字数を超えてから(短すぎると用件が読み取れない) */
+const SUBJECT_MIN_TEXT = 15;
+
+type SubjectState =
+  | { status: "idle" }
+  | { status: "running" }
+  | { status: "done"; subjects: string[]; error?: string };
+
+/** 件名の候補(/api/ai/subject)を頼む。requestedFor は最後に頼んだ本文 */
+function useSubjectSuggestions() {
+  const [state, setState] = useState<SubjectState>({ status: "idle" });
+  const [requestedFor, setRequestedFor] = useState("");
+  const controller = useRef<AbortController | null>(null);
+  useEffect(() => () => controller.current?.abort(), []);
+
+  const start = async (payload: { to: string; text: string }) => {
+    controller.current?.abort();
+    const ac = new AbortController();
+    controller.current = ac;
+    setRequestedFor(payload.text.trim());
+    setState({ status: "running" });
+    try {
+      const res = await fetch("/api/ai/subject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: ac.signal,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const result = (await res.json()) as SubjectResponse;
+      if (controller.current === ac) setState({ status: "done", ...result });
+    } catch (e) {
+      if (ac.signal.aborted) return;
+      setState({ status: "done", subjects: [], error: e instanceof Error ? `通信に失敗しました (${e.message})` : "通信に失敗しました" });
+    }
+  };
+  const reset = () => {
+    controller.current?.abort();
+    setState({ status: "idle" });
+  };
+  return { state, start, reset, requestedFor };
+}
+
+function SubjectSuggestions({
+  state,
+  canSuggest,
+  onSuggest,
+  onPick,
+}: {
+  state: SubjectState;
+  canSuggest: boolean;
+  onSuggest: () => void;
+  onPick: (subject: string) => void;
+}) {
+  const chip = "rounded-full border border-accent px-2.5 py-0.5 text-xs text-accent transition-colors hover:bg-accent-soft";
+  return (
+    <div className="-mt-1 flex flex-wrap items-center gap-1.5 text-xs [&_svg]:size-3.5">
+      <span className="flex items-center gap-1 text-accent" aria-hidden="true">
+        <SparkleIcon />
+      </span>
+      {state.status === "running" ? (
+        <span className="text-muted">栞が件名を考えています…</span>
+      ) : state.status === "done" && state.subjects.length > 0 ? (
+        <>
+          <span className="text-muted">件名の候補:</span>
+          {state.subjects.map((s) => (
+            <button key={s} type="button" onClick={() => onPick(s)} className={chip}>
+              {s}
+            </button>
+          ))}
+        </>
+      ) : state.status === "done" && state.error ? (
+        <span role="alert" className="text-red-600">{state.error}</span>
+      ) : null}
+      {canSuggest && state.status !== "running" ? (
+        <button type="button" onClick={onSuggest} className="text-muted underline hover:text-foreground">
+          {state.status === "done" ? "考え直してもらう" : "栞に件名を考えてもらう"}
+        </button>
+      ) : null}
+    </div>
   );
 }
