@@ -1,0 +1,20 @@
+<!doctype html>
+<!--
+  ホーム画面のアイコン(app/apple-icon.png、public/icons/icon-*.png)の元絵。配色「若竹と蔵書印」の蔵書印(白文印)。
+  字は Yuji Syuku(SIL Open Font License)。書き出し方:
+    Chrome で 1024×1024 のスクリーンショットを撮る(--headless --window-size=1024,1024 --screenshot)→ 180・192・512px に縮める
+-->
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Yuji+Syuku&text=栞">
+<style>
+  html, body { margin: 0; width: 1024px; height: 1024px; overflow: hidden; }
+  .paper { width: 1024px; height: 1024px; display: flex; align-items: center; justify-content: center; background: #f5f6f2; }
+  /* 角印。外枠の内側に紙色の細い線を入れて、印の縁取りにする */
+  .seal {
+    width: 800px; height: 800px; border-radius: 72px; background: #4f6e58;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: inset 0 0 0 30px #4f6e58, inset 0 0 0 42px #f5f6f2;
+  }
+  .kanji { font-family: "Yuji Syuku"; font-size: 600px; line-height: 1; color: #f5f6f2; transform: translateY(-14px); }
+</style>
+<div class="paper"><div class="seal"><span class="kanji">栞</span></div></div>
