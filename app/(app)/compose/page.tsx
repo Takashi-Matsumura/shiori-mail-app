@@ -1,9 +1,10 @@
 import { Suspense } from "react";
-import { ComposeForm, type ForwardSource } from "@/components/compose-form";
+import { ComposeForm, type ForwardSource, type ReplyContextData } from "@/components/compose-form";
 import { getSignature, requireAccount } from "@/lib/accounts";
 import { bytes, fullDate } from "@/lib/format";
 import { parseRaw } from "@/lib/mail/parse";
-import { getMessageById, listContacts } from "@/lib/queries";
+import type { ExtractedItem } from "@/lib/ai/prompts";
+import { getAiResults, getMessageById, listContacts } from "@/lib/queries";
 
 /** 引用に使う本文を整える。行末の空白を落とし、続く空行は 1 行にまとめる(HTML メールから作った本文は空行が多い) */
 function tidy(text: string): string {
@@ -54,6 +55,17 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
     };
   }
 
+  // 返信を書く横に出す、元のメールの要点(アシストで作った要約と抜き出し)
+  let replyContext: ReplyContextData | null = null;
+  if (original) {
+    const ai = await getAiResults(original.id);
+    let items: ExtractedItem[] | null = null;
+    try {
+      items = ai.extract ? ((JSON.parse(ai.extract.result) as { items?: ExtractedItem[] }).items ?? []) : null;
+    } catch {}
+    replyContext = { messageId: original.id, summary: ai.summary?.result ?? null, items };
+  }
+
   let forwardOf: ForwardSource | null = null;
   if (forwarded) {
     const refs: string[] = forwarded.refs ? JSON.parse(forwarded.refs) : [];
@@ -92,6 +104,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       defaults={defaults}
       replyTo={original ? { id: original.id, subject: original.subject, from: original.from_name || original.from_addr } : null}
       forward={forwardOf}
+      replyContext={replyContext}
       account={{ email: account.email, name: account.name, readOnly: account.readOnly }}
       contacts={await listContacts(account.id, account.email)}
     />
