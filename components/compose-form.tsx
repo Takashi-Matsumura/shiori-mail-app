@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useId, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
 import { sendAction, type SendState } from "@/app/actions";
 import { AiMeta } from "@/components/ai-meta";
 import { AddressInput, type ContactOption } from "@/components/address-input";
@@ -13,6 +13,9 @@ import { CheckIcon, CloseIcon, PaperclipIcon, SentIcon, SparkleIcon } from "@/co
 import { TONES, type ExtractedItem, type SubjectResponse } from "@/lib/ai/prompts";
 import { useNotices } from "@/lib/client/notices";
 import { useAiStream } from "@/lib/client/use-ai-stream";
+import { useComposeDraft } from "@/lib/client/use-compose-draft";
+import type { ComposeDraft } from "@/lib/drafts";
+import { fullDate } from "@/lib/format";
 import { useSendReview } from "@/lib/client/use-send-review";
 
 /** 転送するメール。attachments の index は、送信のときにサーバが元メールの添付を取り出す番号 */
@@ -33,16 +36,48 @@ type Props = {
   replyContext: ReplyContextData | null;
   account: { email: string; name: string; readOnly: boolean };
   contacts: ContactOption[];
+  /** draftKind の書きかけ(サーバに保存済みのもの)。無ければ null */
+  draftKind: string;
+  savedDraft: ComposeDraft | null;
 };
 
 const inputClass = "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 focus:border-accent focus:outline-none";
 
-export function ComposeForm({ defaults, replyTo, forward, replyContext, account, contacts }: Props) {
+export function ComposeForm({ defaults, replyTo, forward, replyContext, account, contacts, draftKind, savedDraft }: Props) {
   const router = useRouter();
   const { notify } = useNotices();
+  const [to, setTo] = useState(defaults.to);
+  const [cc, setCc] = useState(defaults.cc);
+  const [subject, setSubject] = useState(defaults.subject);
+  const [body, setBody] = useState(defaults.body);
+  // 返信の引用は外せる。転送するメールは転送そのものなので、いつも付ける
+  const [includeQuote, setIncludeQuote] = useState(true);
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const quoteId = useId();
+  // Cc はたまにしか使わないので、入っているときと、「Cc」を押したときだけ出す
+  const [showCc, setShowCc] = useState(defaults.cc !== "");
+  // 書きかけの自動保存(このブラウザに保存)。開いたときに前回の書きかけがあれば、戻すかを聞く
+  const initial = useMemo(
+    () => ({ to: defaults.to, cc: defaults.cc, subject: defaults.subject, body: defaults.body, includeQuote: true }),
+    [defaults],
+  );
+  const draft = useComposeDraft(draftKind, savedDraft, { to, cc, subject, body, includeQuote }, initial);
+  const restore = () => {
+    if (!draft.saved) return;
+    setTo(draft.saved.to);
+    setCc(draft.saved.cc);
+    setShowCc(draft.saved.cc !== "");
+    setSubject(draft.saved.subject);
+    setBody(draft.saved.body);
+    setIncludeQuote(draft.saved.includeQuote);
+    unconfirm();
+  };
   // 送れたら、結果はヘッダーのお知らせで伝えて一覧へ戻る。遷移もアクションの中で行い、戻るまで「送信中…」のままにする。
   const [state, action, pending] = useActionState<SendState, FormData>(async (prev, formData) => {
+    // 送っている間と送ったあとは書きかけを保存しない(送れた書きかけはサーバが消す)
+    draft.stop();
     const next = await sendAction(prev, formData);
+    if (!next?.ok) draft.resume();
     if (next?.ok) {
       const { rejected, appended } = next.result;
       const problems = [
@@ -58,14 +93,6 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
     }
     return next;
   }, null);
-  const [to, setTo] = useState(defaults.to);
-  const [cc, setCc] = useState(defaults.cc);
-  const [subject, setSubject] = useState(defaults.subject);
-  const [body, setBody] = useState(defaults.body);
-  // 返信の引用は外せる。転送するメールは転送そのものなので、いつも付ける
-  const [includeQuote, setIncludeQuote] = useState(true);
-  const [quoteOpen, setQuoteOpen] = useState(false);
-  const quoteId = useId();
   // 送信前の確認。チェックを入れたら栞が見直す。どこかを書き換えたら、確認し直してもらうために外す。
   const [confirmed, setConfirmed] = useState(false);
   // 見直しの終わりを待たずに送ることにしたか
@@ -98,6 +125,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
     const edited =
       to !== defaults.to || cc !== defaults.cc || subject !== defaults.subject || body !== defaults.body || !includeQuote;
     if (edited && !window.confirm("書きかけの内容を破棄して戻りますか？")) return;
+    if (edited) draft.discard();
     ai.stop();
     // 開いてきた画面(一覧や返信元のメール)へ戻す。URL を直接開いたときは戻り先がないので受信トレイへ。
     if (window.history.length > 1) router.back();
@@ -125,6 +153,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
       <input type="hidden" name="inReplyTo" value={defaults.inReplyTo} />
       <input type="hidden" name="references" value={defaults.references} />
       {forward ? <input type="hidden" name="forwardOf" value={forward.id} /> : null}
+      <input type="hidden" name="draftKind" value={draftKind} />
 
       <section aria-label="操作" className="order-3 flex flex-col gap-3 lg:order-1">
         <div className="flex flex-col gap-3 lg:sticky lg:top-0">
@@ -231,36 +260,70 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
           {replyTo ? <p className="text-muted">{replyTo.from} さんの「{replyTo.subject}」への返信</p> : null}
           {forward ? <p className="text-muted">{forward.from} さんの「{forward.subject}」を転送</p> : null}
         </div>
+        {draft.saved ? (
+          <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-accent bg-accent-soft px-3.5 py-2 text-xs">
+            <span className="min-w-0 flex-1">前回の書きかけがあります({fullDate(draft.saved.savedAt)} に保存)</span>
+            <button type="button" onClick={restore} className="font-medium text-accent underline">
+              書きかけに戻す
+            </button>
+            <button type="button" onClick={draft.discard} className="text-muted underline hover:text-foreground">
+              破棄する
+            </button>
+          </div>
+        ) : null}
         <div className="grid grid-cols-[4rem_1fr] items-center gap-x-2 gap-y-2">
           <span className="text-muted">差出人</span>
           <span>{account.name ? `${account.name} <${account.email}>` : account.email}</span>
           <label htmlFor="to" className="text-muted">宛先</label>
           {/* 返信は宛先が決まっているので本文から、新規作成と転送は宛先から書き始める */}
-          <AddressInput
-            id="to"
-            name="to"
-            value={to}
-            onChange={(v) => {
-              setTo(v);
-              unconfirm();
-            }}
-            contacts={contacts}
-            className={inputClass}
-            placeholder="someone@example.com"
-            autoFocus={!replyTo}
-          />
-          <label htmlFor="cc" className="text-muted">Cc</label>
-          <AddressInput
-            id="cc"
-            name="cc"
-            value={cc}
-            onChange={(v) => {
-              setCc(v);
-              unconfirm();
-            }}
-            contacts={contacts}
-            className={inputClass}
-          />
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <AddressInput
+                id="to"
+                name="to"
+                value={to}
+                onChange={(v) => {
+                  setTo(v);
+                  unconfirm();
+                }}
+                contacts={contacts}
+                className={inputClass}
+                placeholder="someone@example.com"
+                autoFocus={!replyTo}
+              />
+            </div>
+            {showCc ? null : (
+              <button
+                type="button"
+                onClick={() => setShowCc(true)}
+                aria-label="Cc を追加"
+                title="Cc を追加"
+                className="shrink-0 rounded-md border border-line px-2 py-1.5 text-xs text-muted hover:bg-panel hover:text-foreground"
+              >
+                Cc
+              </button>
+            )}
+          </div>
+          {showCc ? (
+            <>
+              <label htmlFor="cc" className="text-muted">Cc</label>
+              <AddressInput
+                id="cc"
+                name="cc"
+                value={cc}
+                onChange={(v) => {
+                  setCc(v);
+                  unconfirm();
+                }}
+                contacts={contacts}
+                className={inputClass}
+                // 「Cc」を押して出したときは、そのまま打てるようにする
+                autoFocus={defaults.cc === ""}
+              />
+            </>
+          ) : (
+            <input type="hidden" name="cc" value="" />
+          )}
           <label htmlFor="subject" className="text-muted">件名</label>
           <input id="subject" name="subject" value={subject} onChange={(e) => {
               setSubject(e.target.value);
@@ -317,7 +380,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
           }}
           rows={16}
           autoFocus={!!replyTo}
-          className={`${inputClass} flex-1 font-mono leading-relaxed`}
+          className={`${inputClass} flex-1 text-[15px] leading-relaxed`}
         />
         {defaults.quote ? (
           <div className="flex flex-col gap-2 rounded-xl border border-line bg-panel px-3.5 py-2.5">

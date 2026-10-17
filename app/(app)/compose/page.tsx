@@ -4,6 +4,7 @@ import { getSignature, requireAccount } from "@/lib/accounts";
 import { bytes, fullDate } from "@/lib/format";
 import { parseRaw } from "@/lib/mail/parse";
 import type { ExtractedItem } from "@/lib/ai/prompts";
+import { getDraft } from "@/lib/drafts";
 import { getAiResults, getMessageById, listContacts } from "@/lib/queries";
 
 /** 引用に使う本文を整える。行末の空白を落とし、続く空行は 1 行にまとめる(HTML メールから作った本文は空行が多い) */
@@ -98,6 +99,7 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
     };
   }
 
+  const draftKind = original ? `reply-${original.id}` : forwardOf ? `forward-${forwardOf.id}` : "new";
   return (
     <ComposeForm
       key={replyId ? `reply-${replyId}` : forwardOf ? `forward-${forwardOf.id}` : "new"}
@@ -107,6 +109,8 @@ async function Compose({ searchParams }: { searchParams: Promise<Record<string, 
       replyContext={replyContext}
       account={{ email: account.email, name: account.name, readOnly: account.readOnly }}
       contacts={await listContacts(account.id, account.email)}
+      draftKind={draftKind}
+      savedDraft={getDraft(draftKind)}
     />
   );
 }

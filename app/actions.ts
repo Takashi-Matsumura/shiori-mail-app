@@ -8,6 +8,7 @@ import { saveAiResult } from "@/lib/ai/ops";
 import { CATEGORIES, PRIORITIES } from "@/lib/ai/prompts";
 import { requireSession } from "@/lib/auth/session";
 import { getDb, setSetting } from "@/lib/db";
+import { deleteDraft, saveDraft } from "@/lib/drafts";
 import { findHandledUids, getMessageById } from "@/lib/queries";
 import { deletePassword, isStorablePassword, keychainAvailable, writePassword } from "@/lib/keychain";
 import { TrashError, moveToTrash, setSeenFlag, syncAccount, verifyImap, type MailboxSlug } from "@/lib/mail/imap";
@@ -132,6 +133,8 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
   } catch (e) {
     return { ok: false, message: describeError(e, "SMTP サーバ") };
   }
+  // 送れたら書きかけは要らない
+  deleteDraft(field("draftKind"));
   // 自分宛のメールや送信済みの控えをすぐ一覧に出す
   await syncAccount(account).catch(() => {});
   refresh();
@@ -381,4 +384,15 @@ export async function trashOneAction(uid: number): Promise<ActionState> {
   const result = await trashUids([uid], { excludeHandled: false });
   if (result?.ok) redirect("/mail/inbox");
   return result;
+}
+
+/** 作成画面の書きかけを保存する(画面から、手が止まるたびに呼ばれる)。サーバに置くので、ロック中やログアウト後は読めない */
+export async function saveDraftAction(kind: string, fields: unknown): Promise<boolean> {
+  await requireSession();
+  return saveDraft(kind, fields);
+}
+
+export async function discardDraftAction(kind: string): Promise<void> {
+  await requireSession();
+  deleteDraft(kind);
 }

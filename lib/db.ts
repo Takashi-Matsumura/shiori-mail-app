@@ -99,6 +99,13 @@ CREATE TABLE IF NOT EXISTS message_done (
   created INTEGER NOT NULL
 );
 
+-- 作成画面の書きかけ。kind は new / reply-<id> / forward-<id>。ログインの内側(サーバ)に置き、ロック中は読めないようにする
+CREATE TABLE IF NOT EXISTS compose_drafts (
+  kind TEXT PRIMARY KEY,
+  data TEXT NOT NULL,
+  saved INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
