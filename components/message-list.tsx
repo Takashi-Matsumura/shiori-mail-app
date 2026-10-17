@@ -54,23 +54,32 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
   return (
     <div className="flex w-96 shrink-0 flex-col border-r border-line bg-panel">
       <header className="flex flex-col gap-3 border-b border-line px-3.5 pb-3 pt-4">
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="min-w-0 text-lg font-semibold">
-            {title} <span className="text-xs font-normal text-muted">{items.length} 通</span>
-            {hiddenCount > 0 ? <span className="ml-1 text-xs font-normal text-muted">(うち {hiddenCount} 通を非表示)</span> : null}
-          </h1>
-          {mailbox === "inbox" ? (
-            <div className="shrink-0 pt-1.5 text-xs text-muted">
-              <Switch
-                label={`未対応のみ(${items.filter((i) => !i.handled).length})`}
-                checked={hideHandled}
-                onChange={setHideHandled}
-                title="返信済み・完了にしたメールを隠し、まだ対応していないメールだけを表示します"
-              />
+        {/* 1 行目: 名前と通数、右端に「未対応のみ」。2 行目: 隠している通数と、仕分けの状態(小さく) */}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="flex min-w-0 items-baseline gap-2 text-lg font-semibold">
+              <span className="truncate">{title}</span>
+              <span className="shrink-0 text-xs font-normal whitespace-nowrap text-muted">{items.length} 通</span>
+            </h1>
+            {mailbox === "inbox" ? (
+              <div className="shrink-0 text-xs text-muted">
+                <Switch
+                  label={`未対応のみ(${items.filter((i) => !i.handled).length})`}
+                  checked={hideHandled}
+                  onChange={setHideHandled}
+                  title="返信済み・完了にしたメールを隠し、まだ対応していないメールだけを表示します"
+                />
+              </div>
+            ) : null}
+          </div>
+          {mailbox === "inbox" || hiddenCount > 0 ? (
+            <div className="flex min-w-0 items-center gap-2 text-xs text-muted">
+              {hiddenCount > 0 ? <span className="shrink-0 whitespace-nowrap">{hiddenCount} 通を非表示</span> : null}
+              {hiddenCount > 0 && mailbox === "inbox" ? <span aria-hidden="true">・</span> : null}
+              {mailbox === "inbox" ? <BatchButton kind="classify" label="仕分け" pending={pendingClassify} compact /> : null}
             </div>
           ) : null}
         </div>
-        {mailbox === "inbox" ? <BatchButton kind="classify" label="栞に仕分けてもらう" pending={pendingClassify} /> : null}
         {classified ? (
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap gap-1.5 text-xs" role="group" aria-label="一覧に出す仕分け(押すと隠す)">
