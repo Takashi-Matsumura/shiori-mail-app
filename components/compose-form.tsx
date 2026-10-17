@@ -15,7 +15,8 @@ import { useNotices } from "@/lib/client/notices";
 import { useAiStream } from "@/lib/client/use-ai-stream";
 import { useComposeDraft } from "@/lib/client/use-compose-draft";
 import type { ComposeDraft } from "@/lib/drafts";
-import { fullDate } from "@/lib/format";
+import { bytes, fullDate } from "@/lib/format";
+import { ATTACH_MAX_FILES, ATTACH_MAX_TOTAL } from "@/lib/mail/limits";
 import { useSendReview } from "@/lib/client/use-send-review";
 
 /** 転送するメール。attachments の index は、送信のときにサーバが元メールの添付を取り出す番号 */
@@ -23,7 +24,7 @@ export type ForwardSource = {
   id: number;
   subject: string;
   from: string;
-  attachments: { index: number; filename: string; size: string }[];
+  attachments: { index: number; filename: string; size: string; bytes: number }[];
 };
 
 export type ReplyContextData = { messageId: number; summary: string | null; items: ExtractedItem[] | null };
@@ -54,6 +55,31 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
   const [includeQuote, setIncludeQuote] = useState(true);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const quoteId = useId();
+  // 自分で付けるファイル。書きかけの保存には入らない(ファイルはこの画面の中だけで持つ)
+  const [files, setFiles] = useState<File[]>([]);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const forwardTotal = forward?.attachments.reduce((sum, a) => sum + a.bytes, 0) ?? 0;
+  const addFiles = (list: FileList | File[]) => {
+    const incoming = [...list].filter((f) => f.size > 0);
+    const next = [...files];
+    for (const f of incoming) {
+      // 同じファイルを 2 度選んだら、1 つだけにする
+      if (!next.some((n) => n.name === f.name && n.size === f.size && n.lastModified === f.lastModified)) next.push(f);
+    }
+    const total = next.reduce((sum, f) => sum + f.size, forwardTotal);
+    if (next.length > ATTACH_MAX_FILES) return setFileError(`添付できるのは ${ATTACH_MAX_FILES} 個までです。`);
+    if (total > ATTACH_MAX_TOTAL) return setFileError(`添付の合計は ${bytes(ATTACH_MAX_TOTAL)} までです(いま ${bytes(total)})。`);
+    setFileError(null);
+    setFiles(next);
+    unconfirm();
+  };
+  const removeFile = (f: File) => {
+    setFiles(files.filter((x) => x !== f));
+    setFileError(null);
+    unconfirm();
+  };
   // Cc はたまにしか使わないので、入っているときと、「Cc」を押したときだけ出す
   const [showCc, setShowCc] = useState(defaults.cc !== "");
   // 書きかけの自動保存(このブラウザに保存)。開いたときに前回の書きかけがあれば、戻すかを聞く
@@ -76,6 +102,9 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
   const [state, action, pending] = useActionState<SendState, FormData>(async (prev, formData) => {
     // 送っている間と送ったあとは書きかけを保存しない(送れた書きかけはサーバが消す)
     draft.stop();
+    // 自分で付けたファイルは画面の状態にあるので、ここで送る中身へ入れる
+    formData.delete("attachment");
+    for (const f of files) formData.append("attachment", f);
     const next = await sendAction(prev, formData);
     if (!next?.ok) draft.resume();
     if (next?.ok) {
@@ -118,7 +147,7 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
     if (!checked) return unconfirm();
     setConfirmed(true);
     // 本文が空なら送信のときに止まるので、見直しは頼まない
-    if (body.trim()) review.start({ to, cc, subject, text: body, replyTo: replyTo?.id });
+    if (body.trim()) review.start({ to, cc, subject, text: body, replyTo: replyTo?.id, attachments: files.length + (forward?.attachments.length ?? 0) });
   };
 
   const cancel = () => {
@@ -254,7 +283,25 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
         </div>
       </section>
 
-      <section aria-label="メール" className="order-1 flex min-w-0 flex-col gap-3 lg:order-2">
+      <section
+        aria-label="メール"
+        // ファイルをここへドラッグしても添付できる
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+        }}
+        onDrop={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          setDragging(false);
+          addFiles(e.dataTransfer.files);
+        }}
+        className={`order-1 flex min-w-0 flex-col gap-3 rounded-xl lg:order-2 ${dragging ? "outline-2 outline-offset-8 outline-accent outline-dashed" : ""}`}
+      >
         <div>
           <h1 className="text-xl font-semibold">{replyTo ? "返信" : forward ? "転送" : "新規作成"}</h1>
           {replyTo ? <p className="text-muted">{replyTo.from} さんの「{replyTo.subject}」への返信</p> : null}
@@ -344,9 +391,10 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
               />
             </>
           ) : null}
-          {forward && forward.attachments.length > 0 ? (
-            <>
-              <span className="self-start pt-1 text-muted">添付</span>
+          <span className="self-start pt-1.5 text-muted">添付</span>
+          <div className="flex flex-col gap-1.5">
+            {forward && forward.attachments.length > 0 ? (
+              <>
               {/* 元メールの添付。最初は全部付け、要らないものだけ外す。本文は変わらないので、送信前の確認はそのまま */}
               <ul className="flex flex-col gap-1">
                 {forward.attachments.map((a) => (
@@ -362,8 +410,54 @@ export function ComposeForm({ defaults, replyTo, forward, replyContext, account,
                   </li>
                 ))}
               </ul>
-            </>
-          ) : null}
+              </>
+            ) : null}
+            {files.length > 0 ? (
+              <ul className="flex flex-col gap-1">
+                {files.map((f) => (
+                  <li key={`${f.name}-${f.size}-${f.lastModified}`} className="flex items-center gap-2">
+                    <span className="text-muted [&_svg]:size-4" aria-hidden="true">
+                      <PaperclipIcon />
+                    </span>
+                    <span className="min-w-0 truncate">{f.name}</span>
+                    <span className="shrink-0 text-xs text-muted tabular-nums">{bytes(f.size)}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(f)}
+                      aria-label={`${f.name} を外す`}
+                      title="外す"
+                      className="shrink-0 rounded p-0.5 text-muted hover:bg-panel hover:text-foreground [&_svg]:size-3.5"
+                    >
+                      <CloseIcon />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <button
+                type="button"
+                onClick={() => fileInput.current?.click()}
+                className="flex items-center gap-1.5 self-start rounded-md border border-line px-2.5 py-1 text-xs hover:bg-panel [&_svg]:size-3.5"
+              >
+                <PaperclipIcon />
+                ファイルを添付
+              </button>
+              <span className="text-xs text-muted">ここへドラッグしても付けられます(合計 {bytes(ATTACH_MAX_TOTAL)} まで)</span>
+            </div>
+            {/* name を付けない(送る中身へは、送信のときに files から入れる) */}
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => {
+                if (e.target.files) addFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            {fileError ? <p role="alert" className="text-xs text-red-600">{fileError}</p> : null}
+          </div>
         </div>
         <label htmlFor="body" className="sr-only">本文</label>
         <textarea

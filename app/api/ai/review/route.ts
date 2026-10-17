@@ -39,7 +39,7 @@ function weekdayChecks(text: string, now: Date): ReviewIssue[] {
 }
 
 /** AI に頼まなくても分かる見落とし。AI が動いていなくても返す。 */
-function ruleChecks(text: string, now: Date): ReviewIssue[] {
+function ruleChecks(text: string, now: Date, attachments: number): ReviewIssue[] {
   const own = text
     .split("\n")
     .filter((l) => !l.startsWith(">"))
@@ -47,8 +47,8 @@ function ruleChecks(text: string, now: Date): ReviewIssue[] {
   const issues: ReviewIssue[] = weekdayChecks(own, now);
   const todo = own.match(/【要確認[^】]*】/);
   if (todo) issues.push({ severity: "要修正", message: "栞の下書きの【要確認】が残っています。中身を書き入れてください。", quote: todo[0].slice(0, 60) });
-  if (/添付/.test(own)) {
-    issues.push({ severity: "確認", message: "本文に「添付」とありますが、このメーラーはファイルを添付できません。", quote: "添付" });
+  if (/添付/.test(own) && attachments === 0) {
+    issues.push({ severity: "確認", message: "本文に「添付」とありますが、ファイルが添付されていません。", quote: "添付" });
   }
   return issues;
 }
@@ -68,7 +68,8 @@ export async function POST(request: Request) {
   const original = Number.isInteger(replyTo) ? await getMessageById(account.id, replyTo) : null;
 
   const now = new Date();
-  const rules = ruleChecks(draft.text, now);
+  const attachments = Number.isInteger(body?.attachments) ? Number(body?.attachments) : 0;
+  const rules = ruleChecks(draft.text, now, attachments);
   const from = account.name ? `${account.name} <${account.email}>` : account.email;
   try {
     const r = await chatJson(getAiConfig(), reviewPrompt({ draft: { from, ...draft }, original: original ?? undefined, now: now.getTime() }), "mail_review", reviewSchema);

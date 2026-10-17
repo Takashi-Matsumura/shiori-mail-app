@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReviewResponse } from "@/lib/ai/prompts";
 
-export type ReviewPayload = { to: string; cc: string; subject: string; text: string; replyTo?: number };
+export type ReviewPayload = { to: string; cc: string; subject: string; text: string; replyTo?: number; attachments?: number };
 export type ReviewState =
   | { status: "idle" }
   | { status: "running" }
