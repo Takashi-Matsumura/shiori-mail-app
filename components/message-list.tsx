@@ -6,6 +6,7 @@ import { useState } from "react";
 import { BatchButton } from "@/components/batch-button";
 import { CategoryBadge } from "@/components/category-badge";
 import { CheckIcon, PaperclipIcon, PriorityIcon } from "@/components/icons";
+import { ImportOlder } from "@/components/import-older";
 import { Switch } from "@/components/switch";
 import { TrashShown } from "@/components/trash-shown";
 import { CATEGORIES } from "@/lib/ai/prompts";
@@ -29,11 +30,14 @@ type Item = {
 
 const PRIORITY_ORDER: Record<string, number> = { 高: 0, 中: 1, 低: 2 };
 
-export function MessageList({ mailbox, title, items, pendingClassify }: {
-  mailbox: string;
+export function MessageList({ mailbox, title, items, pendingClassify, olderRemaining, olderBatch }: {
+  mailbox: "inbox" | "sent";
   title: string;
   items: Item[];
   pendingClassify: number;
+  /** 手元の最も古いメールより前に、サーバに残っている通数 */
+  olderRemaining: number;
+  olderBatch: number;
 }) {
   const params = useParams<{ uid?: string }>();
   const [hidden, toggleHidden] = useHiddenCategories();
@@ -153,6 +157,7 @@ export function MessageList({ mailbox, title, items, pendingClassify }: {
           );
         })}
       </ul>
+      <ImportOlder mailbox={mailbox} remaining={olderRemaining} batch={olderBatch} />
       {/*
         たまにしか使わない操作は、上のフィルタ(仕分けのボタン)と取り違えないよう、下のフッターにアイコンだけで並べる。
         並べ替えの切り替えは左、取り返しのつかないゴミ箱は右端に離して置く

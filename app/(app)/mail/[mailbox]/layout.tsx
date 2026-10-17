@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { MessageList } from "@/components/message-list";
 import { requireAccount } from "@/lib/accounts";
 import { shortDate } from "@/lib/format";
-import { MAILBOXES } from "@/lib/mail/imap";
+import { MAILBOXES, OLDER_BATCH, getOlderRemaining } from "@/lib/mail/imap";
 import { getPendingCounts, listMessages } from "@/lib/queries";
 
 export default function MailboxLayout({ children, params }: LayoutProps<"/mail/[mailbox]">) {
@@ -28,6 +28,8 @@ async function ListPane({ params }: { params: Promise<{ mailbox: string }> }) {
       mailbox={box.slug}
       title={box.label}
       pendingClassify={pending.classify}
+      olderRemaining={getOlderRemaining(account, box.slug)}
+      olderBatch={OLDER_BATCH}
       items={items.map((m) => ({
         uid: m.uid,
         subject: m.subject || "(件名なし)",

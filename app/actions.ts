@@ -11,7 +11,7 @@ import { getDb, setSetting } from "@/lib/db";
 import { deleteDraft, saveDraft } from "@/lib/drafts";
 import { findHandledUids, getMessageById } from "@/lib/queries";
 import { deletePassword, isStorablePassword, keychainAvailable, writePassword } from "@/lib/keychain";
-import { TrashError, moveToTrash, setSeenFlag, syncAccount, verifyImap, type MailboxSlug } from "@/lib/mail/imap";
+import { TrashError, importOlder, moveToTrash, setSeenFlag, syncAccount, verifyImap, type MailboxSlug } from "@/lib/mail/imap";
 import { ATTACH_MAX_FILES, ATTACH_MAX_TOTAL } from "@/lib/mail/limits";
 import { extractAttachments, type AttachmentContent } from "@/lib/mail/parse";
 import { sendMail, verifySmtp, type SendResult } from "@/lib/mail/smtp";
@@ -48,6 +48,22 @@ export async function syncAction(): Promise<ActionState> {
     const count = await syncAccount(account);
     refresh();
     return { ok: true, message: count > 0 ? `${count} 通を取り込みました` : "新着はありません" };
+  } catch (e) {
+    return { ok: false, message: describeError(e, "IMAP サーバ") };
+  }
+}
+
+/** 手元の最も古いメールより前のメールを、もう少し取り込む(一覧の下の「古いメールを取り込む」) */
+export async function importOlderAction(mailbox: MailboxSlug): Promise<ActionState> {
+  await requireSession();
+  if (mailbox !== "inbox" && mailbox !== "sent") return { ok: false, message: "不正な指定です" };
+  const account = getAccount();
+  if (!account) return { ok: false, message: NO_ACCOUNT };
+  try {
+    const { imported, remaining } = await importOlder(account, mailbox);
+    refresh();
+    if (imported === 0) return { ok: true, message: "取り込める古いメールはありませんでした" };
+    return { ok: true, message: `${imported} 通を取り込みました${remaining > 0 ? `(サーバにはまだ ${remaining} 通あります)` : ""}` };
   } catch (e) {
     return { ok: false, message: describeError(e, "IMAP サーバ") };
   }
