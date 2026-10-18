@@ -81,7 +81,7 @@ export async function classifyMessage(m: MessageRow, options: { preferLlm?: bool
     if (knn) return knn;
   }
   const r = await chatJson(cfg, classifyPrompt(m), "classification", classifySchema);
-  if (!isClassification(r.value)) throw new AiError("分類結果が想定した形ではありませんでした。");
+  if (!isClassification(r.value)) throw new AiError("分類結果が想定した形ではありませんでした。", { perMessage: true });
   saveAiResult(m.id, "classify", r.model, JSON.stringify(r.value), r.ms, r.usage);
   return { ms: r.ms, summary: `${r.value.category} / 優先度 ${r.value.priority}` };
 }
@@ -108,7 +108,7 @@ export async function closureForMessage(m: MessageRow): Promise<{ ms: number; su
     .slice(-(CLOSURE_THREAD_LIMIT - 1))
     .map((t) => ({ ...t, sent: t.mailbox === "sent" }));
   const r = await chatJson(getAiConfig(), closurePrompt([...thread, { ...m, sent: false }]), "closure", closureSchema);
-  if (!isClosure(r.value)) throw new AiError("判断の結果が想定した形ではありませんでした。");
+  if (!isClosure(r.value)) throw new AiError("判断の結果が想定した形ではありませんでした。", { perMessage: true });
   const value = { status: r.value.status, reason: r.value.reason.replace(/\s+/g, " ").trim().slice(0, 80) };
   saveAiResult(m.id, "closure", r.model, JSON.stringify(value), r.ms, r.usage);
   return { ms: r.ms, summary: value.status };
