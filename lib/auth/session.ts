@@ -1,10 +1,16 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { siteFor, type Site } from "@/lib/auth/site";
 import { getDb } from "@/lib/db";
 
-export const SESSION_COOKIE = "shiori_session";
+/**
+ * セッションの Cookie の名前。公開ホスト(HTTPS)では __Host- を付ける。この名前は Secure・Path=/・Domain なしの Cookie にしか
+ * 使えないので、同じドメインの別のサイト(兄弟サブドメイン)が Domain=親ドメイン で同じ名前の Cookie を植えて、
+ * ログインを妨げたり、別のセッションにすり替えたりできない。localhost は HTTP で Secure を付けられないので接頭辞なし
+ */
+export const sessionCookieName = (site: Site) => (site.secure ? "__Host-shiori_session" : "shiori_session");
 
 /** 操作が途切れてからロックするまで。画面を開いたままの場合は、画面側(IdleLock)が同じ時間でロックする。 */
 export const IDLE_MS = 30 * 60_000;
@@ -48,19 +54,21 @@ export function deleteSession(token: string | undefined): void {
   if (token) getDb().prepare("DELETE FROM sessions WHERE token_hash = ?").run(hash(token));
 }
 
-/** secure は公開ホスト(HTTPS)で開いているとき。localhost は HTTP なので付けない */
-export const sessionCookieOptions = (secure: boolean) =>
-  ({
+/** セッションを作り、その入口の Cookie に入れる。secure は公開ホスト(HTTPS)で開いているとき。localhost は HTTP なので付けない */
+export async function setSessionCookie(site: Site): Promise<void> {
+  (await cookies()).set(sessionCookieName(site), createSession(), {
     httpOnly: true,
-    secure,
+    secure: site.secure,
     // 他サイトから辿ってきたリクエストには付けない(CSRF よけ)
     sameSite: "strict",
     path: "/",
     maxAge: ABSOLUTE_MS / 1000,
-  }) as const;
+  });
+}
 
 export async function isAuthenticated(): Promise<boolean> {
-  return validateSession((await cookies()).get(SESSION_COOKIE)?.value);
+  const site = siteFor(await headers());
+  return site ? validateSession((await cookies()).get(sessionCookieName(site))?.value) : false;
 }
 
 /**

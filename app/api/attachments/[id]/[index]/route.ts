@@ -17,8 +17,10 @@ function disposition(type: "inline" | "attachment", filename: string): string {
  */
 export async function GET(request: Request, ctx: RouteContext<"/api/attachments/[id]/[index]">) {
   if (!(await isAuthenticated())) return new Response("Unauthorized", { status: 401 });
-  // ほかのサイトから、ログイン中のこのアプリの添付を開かせない
-  if (request.headers.get("sec-fetch-site") === "cross-site") return new Response("Forbidden", { status: 403 });
+  // ほかのサイトから、ログイン中のこのアプリの添付を開かせない。同じドメインの別のサイト(same-site)も含めて断り、
+  // このアプリの画面から(same-origin)と、URL を直接開いたとき(none)だけ通す
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite !== null && fetchSite !== "same-origin" && fetchSite !== "none") return new Response("Forbidden", { status: 403 });
   const { id, index } = await ctx.params;
   if (!/^\d+$/.test(id) || !/^\d+$/.test(index)) return new Response("Bad Request", { status: 400 });
 

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { passedAccess } from "@/lib/auth/access";
-import { SESSION_COOKIE, validateSession } from "@/lib/auth/session";
+import { sessionCookieName, validateSession } from "@/lib/auth/session";
 import { siteFor } from "@/lib/auth/site";
 
 // ログインしていなくても開ける入口。パスキーの API は、それぞれの中で登録の可否などを確かめる。
@@ -43,7 +43,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (validateSession(request.cookies.get(SESSION_COOKIE)?.value)) return NextResponse.next();
+  if (validateSession(request.cookies.get(sessionCookieName(site))?.value)) return NextResponse.next();
 
   // 画面の表示ならログイン画面へ。それ以外(API・Server Action・RSC の取得)は 401 で断る
   const isPageView = request.method === "GET" && request.headers.get("sec-fetch-dest") === "document";
