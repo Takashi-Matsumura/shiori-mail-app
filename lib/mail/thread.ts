@@ -7,14 +7,32 @@ const SEPARATORS = /[\s<>,;"']+/;
 const MAX_REFS = 50;
 
 /**
- * From・To・Cc の表示文字列から、メールアドレスだけを小文字で取り出す。
+ * メールアドレスを比べられる形にそろえる。小文字にし、`+タグ` を落とす。
+ * Gmail はローカル部の `.` を無視し、googlemail.com も同じ受信箱なので、それもそろえる。
+ * 利用者自身のアドレスを除くときに、表記を変えただけの偽装(me+x@、m.e@)をすり抜けさせないため
+ */
+export function normalizeAddress(address: string): string {
+  const a = address.toLowerCase();
+  const at = a.lastIndexOf("@");
+  if (at <= 0) return a;
+  let local = a.slice(0, at);
+  let domain = a.slice(at + 1);
+  const plus = local.indexOf("+");
+  if (plus > 0) local = local.slice(0, plus);
+  if (domain === "googlemail.com") domain = "gmail.com";
+  if (domain === "gmail.com") local = local.replaceAll(".", "");
+  return `${local}@${domain}`;
+}
+
+/**
+ * From・To・Cc の表示文字列から、メールアドレスだけを取り出してそろえる。
  * 区切り文字で分けてから `@` を含むものを選ぶ。`[^…]+@[^…]+` の正規表現は、`@` の無い長い語で 2 乗の時間がかかった
  */
 function addresses(text: string): string[] {
   return text
     .split(SEPARATORS)
     .filter((t) => t.includes("@"))
-    .map((a) => a.toLowerCase());
+    .map(normalizeAddress);
 }
 
 type Headers = { messageId: string | null; inReplyTo: string | null; refs: string[]; fromAddr: string; senderAuth: SenderAuth };
@@ -69,8 +87,8 @@ export function threadKeyFor(db: DatabaseSync, account: string, mailbox: string,
     return root && !mixed ? root : ownKey(db, account, mailbox, uid, mail.messageId);
   }
 
-  const sender = mail.fromAddr.toLowerCase();
-  const self = new Set(selfAddresses.map((a) => a.toLowerCase()));
+  const sender = normalizeAddress(mail.fromAddr);
+  const self = new Set(selfAddresses.map(normalizeAddress));
   // References は送り手がいくらでも並べられる。直前のメール(In-Reply-To と References の末尾)から MAX_REFS 件だけ見る
   const recent = [mail.inReplyTo, ...mail.refs.slice(-MAX_REFS)];
   const referenced = [...new Set(recent.filter((id): id is string => Boolean(id)))];
