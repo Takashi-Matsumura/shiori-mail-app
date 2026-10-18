@@ -14,6 +14,7 @@ import type { Classification, Closure, ExtractedItem } from "@/lib/ai/prompts";
 import { bytes, fullDate } from "@/lib/format";
 import { MAILBOXES } from "@/lib/mail/imap";
 import { linkSignature } from "@/lib/mail/link-sig";
+import { SENDER_AUTH_WARNING } from "@/lib/mail/sender-auth";
 import { parseRaw } from "@/lib/mail/parse";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { getAiResults, getHandled, getMessage, getThread, type AiResultRow } from "@/lib/queries";
@@ -122,6 +123,19 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
           <dt>差出人</dt>
           <dd className="min-w-0 break-words text-foreground">
             <span className="font-medium">{message.from_name}</span> <span className="text-muted">&lt;{message.from_addr}&gt;</span>
+            {/* 受信サーバの認証結果で、差出人が偽装されていそうなときだけ知らせる(確かめられたときに「本物」の印は出さない) */}
+            {parsed.senderAuth !== "ok" ? (
+              <p
+                role="alert"
+                className={`mt-1 rounded-md border px-2 py-1 text-xs ${
+                  parsed.senderAuth === "fail"
+                    ? "border-red-300 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100"
+                    : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100"
+                }`}
+              >
+                {SENDER_AUTH_WARNING[parsed.senderAuth].message}
+              </p>
+            ) : null}
           </dd>
           <dt>宛先</dt>
           <dd className="min-w-0 break-words">{message.to_text}</dd>
@@ -142,7 +156,8 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
         messageId={message.id}
         senderAddr={message.from_addr}
         spam={spam}
-        linkSig={linkSignature(message.from_addr, spam)}
+        senderAuth={parsed.senderAuth}
+        linkSig={linkSignature({ sender: message.from_addr, spam, auth: parsed.senderAuth })}
         text={message.text}
         html={message.html}
         size={bytes(message.size)}

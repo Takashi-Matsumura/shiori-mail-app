@@ -10,7 +10,9 @@ type Props = {
   senderAddr: string;
   /** 栞が「迷惑」に仕分けたメールか。確認ページで強く注意する */
   spam: boolean;
-  /** 差出人と迷惑の判定に付けるサーバの署名(lib/mail/link-sig.ts)。確認ページが、アプリの作ったリンクかを確かめる */
+  /** 差出人の認証結果(lib/mail/sender-auth.ts)。偽装の疑いがあれば、確認ページでも知らせる */
+  senderAuth: "ok" | "fail" | "unverified";
+  /** 差出人・迷惑の判定・認証結果に付けるサーバの署名(lib/mail/link-sig.ts)。確認ページが、アプリの作ったリンクかを確かめる */
   linkSig: string;
   text: string;
   html: string | null;
@@ -62,7 +64,7 @@ function sanitizeHtml(html: string, linkFor: (url: string, text: string) => stri
 
 const noop = () => () => {};
 
-function Body({ messageId, senderAddr, spam, linkSig, text, html, attachments }: Omit<Props, "size">) {
+function Body({ messageId, senderAddr, spam, senderAuth, linkSig, text, html, attachments }: Omit<Props, "size">) {
   const [mode, setMode] = useState<"text" | "html">(html ? "html" : "text");
   const [allowImages, setAllowImages] = useState(false);
   // 無害化に使う DOMParser はブラウザにしか無い。サーバでの描画(と、それに合わせる最初の描画)では解析せず、
@@ -73,10 +75,11 @@ function Body({ messageId, senderAddr, spam, linkSig, text, html, attachments }:
     return (url: string, label: string) => {
       const q = new URLSearchParams({ u: url, t: label.replace(/\s+/g, " ").trim().slice(0, 200), s: senderAddr });
       if (spam) q.set("spam", "1");
+      if (senderAuth !== "ok") q.set("a", senderAuth);
       q.set("k", linkSig);
       return `${inBrowser ? window.location.origin : ""}/link?${q}`;
     };
-  }, [inBrowser, senderAddr, spam, linkSig]);
+  }, [inBrowser, senderAddr, spam, senderAuth, linkSig]);
   const clean = useMemo(
     () => (inBrowser && mode === "html" && html ? sanitizeHtml(html, linkFor) : null),
     [inBrowser, mode, html, linkFor],

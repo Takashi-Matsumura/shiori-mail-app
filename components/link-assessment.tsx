@@ -16,7 +16,7 @@ type State = { status: "loading" } | { status: "done"; assessment: LinkAssessmen
  * リンクの確認ページに出す、栞の見立て。ページは先に出し、見立ては AI の答えが返ってから出す。
  * 開くかどうかのボタンの見た目は、機械的な手がかりだけで決める(栞の見立てで「安全そう」に見せない)。
  */
-export function LinkAssessmentNote({ u, t, s, spam, k }: { u: string; t: string; s: string; spam: boolean; k: string }) {
+export function LinkAssessmentNote({ u, t, s, spam, a, k }: { u: string; t: string; s: string; spam: boolean; a: string; k: string }) {
   const [state, setState] = useState<State>({ status: "loading" });
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export function LinkAssessmentNote({ u, t, s, spam, k }: { u: string; t: string;
     fetch("/api/link/assess", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ u, t, s, spam, k }),
+      body: JSON.stringify({ u, t, s, spam, a, k }),
       signal: ac.signal,
     })
       .then(async (res) => {
@@ -36,7 +36,7 @@ export function LinkAssessmentNote({ u, t, s, spam, k }: { u: string; t: string;
         if (!ac.signal.aborted) setState({ status: "error", message: "栞に聞けませんでした。" });
       });
     return () => ac.abort();
-  }, [u, t, s, spam, k]);
+  }, [u, t, s, spam, a, k]);
 
   return (
     <section aria-live="polite" className="flex flex-col gap-1">
