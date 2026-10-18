@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AssistButton } from "@/components/assist-button";
 import { aquaClass } from "@/components/aqua-button";
-import { BookmarkBand } from "@/components/bookmark-band";
+import { BookmarkFrame } from "@/components/bookmark-frame";
 import { BookmarkButton } from "@/components/bookmark-button";
 import { DoneButton } from "@/components/done-button";
 import { TrashOneButton } from "@/components/trash-one-button";
@@ -61,6 +61,52 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
 
   const closure = parseResult<Closure>(ai.closure);
   const spam = parseResult<Classification>(ai.classify)?.category === "迷惑";
+  const content = (
+    <>
+      <dl className="grid grid-cols-[4rem_1fr] gap-x-2 gap-y-1 rounded-xl border border-line bg-panel px-3.5 py-3 text-muted">
+        <dt>差出人</dt>
+        <dd className="min-w-0 break-words text-foreground">
+          <span className="font-medium">{message.from_name}</span> <span className="text-muted">&lt;{message.from_addr}&gt;</span>
+          {/* 受信サーバの認証結果で、差出人が偽装されていそうなときだけ知らせる(確かめられたときに「本物」の印は出さない) */}
+          {parsed.senderAuth !== "ok" ? (
+            <p
+              role="alert"
+              className={`mt-1 rounded-md border px-2 py-1 text-xs ${
+                parsed.senderAuth === "fail"
+                  ? "border-red-300 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100"
+                  : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100"
+              }`}
+            >
+              {SENDER_AUTH_WARNING[parsed.senderAuth].message}
+            </p>
+          ) : null}
+        </dd>
+        <dt>宛先</dt>
+        <dd className="min-w-0 break-words">{message.to_text}</dd>
+        {message.cc_text ? (
+          <>
+            <dt>Cc</dt>
+            <dd className="min-w-0 break-words">{message.cc_text}</dd>
+          </>
+        ) : null}
+        <dt>日時</dt>
+        <dd className="tabular-nums">{fullDate(message.date)}</dd>
+      </dl>
+
+      <MessageBody
+        key={`body-${message.id}`}
+        messageId={message.id}
+        senderAddr={message.from_addr}
+        spam={spam}
+        senderAuth={parsed.senderAuth}
+        linkSig={linkSignature({ sender: message.from_addr, spam, auth: parsed.senderAuth })}
+        text={message.text}
+        html={message.html}
+        size={bytes(message.size)}
+        attachments={parsed.attachments.map((a) => ({ ...a, size: bytes(a.size) }))}
+      />
+    </>
+  );
   return (
     <article className="mx-auto flex max-w-4xl flex-col gap-4 p-4 sm:p-6">
       <header className="flex flex-col gap-3">
@@ -112,17 +158,6 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
             <MoreActions key={`more-${message.id}`} messageId={message.id} />
           </div>
         </div>
-        {bookmark ? (
-          <BookmarkBand
-            key={`band-${message.id}`}
-            messageId={message.id}
-            note={bookmark.note}
-            noteBy={bookmark.noteBy}
-            created={bookmark.created}
-            after={after.map((t) => ({ id: t.id, href: `/mail/${t.mailbox}/${t.uid}`, from: t.from, date: t.date, sent: t.sent }))}
-            recap={recap && typeof recap.text === "string" ? { text: recap.text, upto: recap.upto, meta: meta(ai.bookmark_recap)! } : null}
-          />
-        ) : null}
         {/* まだ対応していないメールには、やり取りが終わっていそうかの栞の判断を添える(完了にするかは利用者が決める) */}
         {box.slug === "inbox" && !handled.done && !handled.replied && closure ? (
           <p
@@ -136,50 +171,25 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
             </span>
           </p>
         ) : null}
-        <dl className="grid grid-cols-[4rem_1fr] gap-x-2 gap-y-1 rounded-xl border border-line bg-panel px-3.5 py-3 text-muted">
-          <dt>差出人</dt>
-          <dd className="min-w-0 break-words text-foreground">
-            <span className="font-medium">{message.from_name}</span> <span className="text-muted">&lt;{message.from_addr}&gt;</span>
-            {/* 受信サーバの認証結果で、差出人が偽装されていそうなときだけ知らせる(確かめられたときに「本物」の印は出さない) */}
-            {parsed.senderAuth !== "ok" ? (
-              <p
-                role="alert"
-                className={`mt-1 rounded-md border px-2 py-1 text-xs ${
-                  parsed.senderAuth === "fail"
-                    ? "border-red-300 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100"
-                    : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100"
-                }`}
-              >
-                {SENDER_AUTH_WARNING[parsed.senderAuth].message}
-              </p>
-            ) : null}
-          </dd>
-          <dt>宛先</dt>
-          <dd className="min-w-0 break-words">{message.to_text}</dd>
-          {message.cc_text ? (
-            <>
-              <dt>Cc</dt>
-              <dd className="min-w-0 break-words">{message.cc_text}</dd>
-            </>
-          ) : null}
-          <dt>日時</dt>
-          <dd className="tabular-nums">{fullDate(message.date)}</dd>
-        </dl>
       </header>
 
-
-      <MessageBody
-        key={`body-${message.id}`}
-        messageId={message.id}
-        senderAddr={message.from_addr}
-        spam={spam}
-        senderAuth={parsed.senderAuth}
-        linkSig={linkSignature({ sender: message.from_addr, spam, auth: parsed.senderAuth })}
-        text={message.text}
-        html={message.html}
-        size={bytes(message.size)}
-        attachments={parsed.attachments.map((a) => ({ ...a, size: bytes(a.size) }))}
-      />
+      {/* メールの差出人・本文。挟んだメールなら、右に栞を立てる(狭い画面では上に帯) */}
+      {bookmark ? (
+        <BookmarkFrame
+          key={`bookmark-${message.id}`}
+          messageId={message.id}
+          note={bookmark.note}
+          noteBy={bookmark.noteBy}
+          tags={bookmark.tags}
+          created={bookmark.created}
+          after={after.map((t) => ({ id: t.id, href: `/mail/${t.mailbox}/${t.uid}`, from: t.from, date: t.date, sent: t.sent }))}
+          recap={recap && typeof recap.text === "string" ? { text: recap.text, upto: recap.upto, meta: meta(ai.bookmark_recap)! } : null}
+        >
+          {content}
+        </BookmarkFrame>
+      ) : (
+        content
+      )}
 
       {thread.length > 1 ? (
         <section className="flex flex-col gap-2 rounded-xl border border-line bg-panel p-3.5">

@@ -26,6 +26,11 @@ export function getDb(): DatabaseSync {
     if (!passkeyCols.some((c) => c.name === "rp_id")) {
       db.exec("ALTER TABLE passkeys ADD COLUMN rp_id TEXT NOT NULL DEFAULT 'localhost'");
     }
+    // キーワードより前に作った bookmarks には tags が無い
+    const bookmarkCols = db.prepare("PRAGMA table_info(bookmarks)").all() as { name: string }[];
+    if (!bookmarkCols.some((c) => c.name === "tags")) {
+      db.exec("ALTER TABLE bookmarks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
+    }
     globalForDb.__mailerDb = db;
   }
   return globalForDb.__mailerDb;

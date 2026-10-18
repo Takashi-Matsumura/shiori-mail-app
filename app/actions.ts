@@ -16,7 +16,7 @@ import { getAiConfig } from "@/lib/ai/config";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { isNewExternalUrl } from "@/lib/ai/loopback";
 import { saveAiResult } from "@/lib/ai/ops";
-import { BOOKMARK_NOTE_MAX, CATEGORIES, PRIORITIES } from "@/lib/ai/prompts";
+import { BOOKMARK_NOTE_MAX, CATEGORIES, PRIORITIES, normalizeTags } from "@/lib/ai/prompts";
 import { requireSession } from "@/lib/auth/session";
 import { getDb, setSetting } from "@/lib/db";
 import { deleteDraft, saveDraft } from "@/lib/drafts";
@@ -501,6 +501,23 @@ export async function saveBookmarkNoteAction(messageId: number, note: string): P
   if (result.changes === 0) return { ok: false, message: "挟んだメールが見つかりません。" };
   refresh();
   return { ok: true, message: "メモを保存しました" };
+}
+
+/** 挟んだメールのキーワードを置き換える(足す・消すは画面側で組み立てて、全体を送る) */
+export async function saveBookmarkTagsAction(messageId: number, tags: string[]): Promise<ActionState> {
+  await requireSession();
+  if (!Number.isInteger(messageId) || !Array.isArray(tags)) return { ok: false, message: "不正な指定です" };
+  const account = getAccount();
+  if (!account) return { ok: false, message: NO_ACCOUNT };
+  const result = getDb()
+    .prepare(
+      `UPDATE bookmarks SET tags = ?, updated = ?
+       WHERE message_id = ? AND message_id IN (SELECT id FROM messages WHERE account = ?)`,
+    )
+    .run(JSON.stringify(normalizeTags(tags)), Date.now(), messageId, account.id);
+  if (result.changes === 0) return { ok: false, message: "挟んだメールが見つかりません。" };
+  refresh();
+  return { ok: true, message: "キーワードを保存しました" };
 }
 
 /** 一度にゴミ箱へ移せる通数。押し間違いで受信トレイが丸ごと消えないよう、上限を置く */

@@ -3,7 +3,7 @@ import { io } from "next/cache";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { getDb } from "@/lib/db";
 import type { MailboxSlug } from "@/lib/mail/imap";
-import { CLOSURE_CATEGORIES, type Classification, type Closure, type ExtractedItem } from "@/lib/ai/prompts";
+import { CLOSURE_CATEGORIES, parseTags, type Classification, type Closure, type ExtractedItem } from "@/lib/ai/prompts";
 
 // node:sqlite は同期ドライバなので、読み取りの前に io() を待って
 // 「リクエスト時に読むデータ」であることを Next.js に伝える(Cache Components)。
@@ -218,7 +218,7 @@ export async function getHandled(messageId: number): Promise<{ replied: boolean;
   return { replied: row?.replied === 1, done: row?.done === 1 };
 }
 
-export type Bookmark = { messageId: number; note: string; noteBy: "ai" | "user"; lastId: number; created: number };
+export type Bookmark = { messageId: number; note: string; noteBy: "ai" | "user"; tags: string[]; lastId: number; created: number };
 export type ThreadMail = MessageRow & { sent: boolean };
 
 // 挟んだ後のメール(messages t)。挟んだメール(messages m)と同じスレッドで、挟んだ後に取り込んだもの。
@@ -226,24 +226,30 @@ export type ThreadMail = MessageRow & { sent: boolean };
 const AFTER_SQL = `m.thread_key IS NOT NULL AND t.account = m.account AND t.thread_key = m.thread_key
   AND t.id > b.last_id AND t.date > m.date`;
 
+type BookmarkRow = { message_id: number; note: string; note_by: string; tags: string; last_id: number; created: number };
+const BOOKMARK_SQL = "SELECT message_id, note, note_by, tags, last_id, created FROM bookmarks WHERE message_id = ?";
+const toBookmark = (r: BookmarkRow): Bookmark => ({
+  messageId: r.message_id,
+  note: r.note,
+  noteBy: r.note_by === "user" ? "user" : "ai",
+  tags: parseTags(r.tags),
+  lastId: r.last_id,
+  created: r.created,
+});
+
 export async function getBookmark(messageId: number): Promise<Bookmark | null> {
   await io();
-  const row = getDb()
-    .prepare("SELECT message_id, note, note_by, last_id, created FROM bookmarks WHERE message_id = ?")
-    .get(messageId) as { message_id: number; note: string; note_by: string; last_id: number; created: number } | undefined;
-  if (!row) return null;
-  return { messageId: row.message_id, note: row.note, noteBy: row.note_by === "user" ? "user" : "ai", lastId: row.last_id, created: row.created };
+  const row = getDb().prepare(BOOKMARK_SQL).get(messageId) as BookmarkRow | undefined;
+  return row ? toBookmark(row) : null;
 }
 
 /** 挟んだメールのスレッドを、挟んだときまで(最後が挟んだメール)と、その後に分けて返す(古い順) */
 export function getBookmarkThread(account: string, messageId: number): { message: MessageRow; bookmark: Bookmark; before: ThreadMail[]; after: ThreadMail[] } | null {
   const db = getDb();
   const message = db.prepare("SELECT * FROM messages WHERE account = ? AND id = ?").get(account, messageId) as MessageRow | undefined;
-  const row = db.prepare("SELECT message_id, note, note_by, last_id, created FROM bookmarks WHERE message_id = ?").get(messageId) as
-    | { message_id: number; note: string; note_by: string; last_id: number; created: number }
-    | undefined;
+  const row = db.prepare(BOOKMARK_SQL).get(messageId) as BookmarkRow | undefined;
   if (!message || !row) return null;
-  const bookmark: Bookmark = { messageId, note: row.note, noteBy: row.note_by === "user" ? "user" : "ai", lastId: row.last_id, created: row.created };
+  const bookmark = toBookmark(row);
   const thread = (
     message.thread_key ? (db.prepare("SELECT * FROM messages WHERE account = ? AND thread_key = ? ORDER BY date ASC").all(account, message.thread_key) as MessageRow[]) : [message]
   ).map((t) => ({ ...t, sent: t.mailbox === "sent" }));
@@ -279,6 +285,7 @@ export type BookmarkItem = {
   from: string;
   date: number;
   note: string;
+  tags: string[];
   created: number;
   /** 挟んだ後に届いた・送ったメールの数と、いちばん新しい日時 */
   after: number;
@@ -290,7 +297,7 @@ export async function listBookmarks(account: string): Promise<BookmarkItem[]> {
   await io();
   const rows = getDb()
     .prepare(
-      `SELECT m.id, m.uid, m.mailbox, m.subject, m.from_name, m.from_addr, m.to_text, m.date, b.note, b.created,
+      `SELECT m.id, m.uid, m.mailbox, m.subject, m.from_name, m.from_addr, m.to_text, m.date, b.note, b.tags, b.created,
               (SELECT COUNT(*) FROM messages t WHERE ${AFTER_SQL}) AS after,
               (SELECT MAX(t.date) FROM messages t WHERE ${AFTER_SQL}) AS last_activity
        FROM bookmarks b JOIN messages m ON m.id = b.message_id
@@ -307,6 +314,7 @@ export async function listBookmarks(account: string): Promise<BookmarkItem[]> {
     to_text: string;
     date: number;
     note: string;
+    tags: string;
     created: number;
     after: number;
     last_activity: number | null;
@@ -319,10 +327,41 @@ export async function listBookmarks(account: string): Promise<BookmarkItem[]> {
     from: r.mailbox === "sent" ? `自分 → ${r.to_text}` : r.from_name || r.from_addr,
     date: r.date,
     note: r.note,
+    tags: parseTags(r.tags),
     created: r.created,
     after: r.after,
     lastActivity: r.last_activity,
   }));
+}
+
+/** 読みかけに付いたキーワードと、その数(多い順) */
+export function countBookmarkTags(items: BookmarkItem[]): { tag: string; count: number }[] {
+  const counts = new Map<string, { tag: string; count: number }>();
+  for (const b of items) {
+    for (const t of b.tags) {
+      const c = counts.get(t.toLowerCase()) ?? { tag: t, count: 0 };
+      c.count++;
+      counts.set(t.toLowerCase(), c);
+    }
+  }
+  return [...counts.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+}
+
+/**
+ * 検索語がメモかキーワードに当たった読みかけ。空白区切りの語をすべて含むもの。
+ * 「#見積」のように # で始まる語は、キーワードと完全に一致するものだけ
+ */
+export async function searchBookmarks(account: string, query: string): Promise<BookmarkItem[]> {
+  const terms = query.split(/\s+/).filter(Boolean).slice(0, 5).map((t) => t.toLowerCase());
+  if (terms.length === 0) return [];
+  const items = await listBookmarks(account);
+  return items.filter((b) =>
+    terms.every((t) => {
+      const tags = b.tags.map((x) => x.toLowerCase());
+      if (/^[#＃]/.test(t)) return tags.includes(t.replace(/^[#＃]+/, ""));
+      return b.note.toLowerCase().includes(t) || tags.some((x) => x.includes(t));
+    }),
+  );
 }
 
 export async function getCounts(account: string): Promise<{ unread: number; total: number }> {

@@ -2,14 +2,15 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { AquaButton } from "@/components/aqua-button";
 import { BatchButton } from "@/components/batch-button";
-import { SearchIcon, SparkleIcon } from "@/components/icons";
+import { BookmarkList } from "@/components/bookmark-list";
+import { BookmarkIcon, SearchIcon, SparkleIcon } from "@/components/icons";
 import { InfoButton } from "@/components/info-button";
 import { HELP } from "@/lib/help-texts";
 import { requireAccount } from "@/lib/accounts";
 import { AiError } from "@/lib/ai/client";
 import { semanticSearch } from "@/lib/ai/ops";
 import { seconds, shortDate } from "@/lib/format";
-import { getMessageById, getPendingCounts, keywordSearch, type SearchHit } from "@/lib/queries";
+import { getMessageById, getPendingCounts, keywordSearch, searchBookmarks, type SearchHit } from "@/lib/queries";
 
 export default function SearchPage({ searchParams }: PageProps<"/search">) {
   return (
@@ -56,6 +57,11 @@ async function Search({ searchParams }: { searchParams: Promise<Record<string, s
         <BatchButton kind="embed" label="メールを索引に入れる" pending={pending.embed} />
       </div>
       {q ? (
+        <Suspense fallback={null}>
+          <BookmarkResults account={account.id} q={q} />
+        </Suspense>
+      ) : null}
+      {q ? (
         <div className="grid gap-4 lg:grid-cols-2">
           <Suspense fallback={<p className="text-muted">検索中…</p>}>
             <KeywordResults account={account.id} q={q} />
@@ -66,6 +72,25 @@ async function Search({ searchParams }: { searchParams: Promise<Record<string, s
         </div>
       ) : null}
     </>
+  );
+}
+
+/** メモかキーワードに当たった読みかけ。無ければ何も出さない(読みかけを使っていない人の画面を増やさない) */
+async function BookmarkResults({ account, q }: { account: string; q: string }) {
+  const items = await searchBookmarks(account, q);
+  if (items.length === 0) return null;
+  return (
+    <section className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-line bg-panel p-3.5">
+      <div className="flex flex-col gap-0.5">
+        <h2 className="flex items-center gap-1.5 font-medium text-accent [&_svg]:size-4">
+          <BookmarkIcon />
+          読みかけ
+          <span className="text-xs font-normal text-muted">{items.length} 件</span>
+        </h2>
+        <p className="text-xs text-muted">挟んだメールのメモ・キーワードに語を含むもの(「#見積」のように # を付けると、キーワードが一致するものだけ)</p>
+      </div>
+      <BookmarkList items={items} />
+    </section>
   );
 }
 

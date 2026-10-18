@@ -394,6 +394,69 @@ ${mails.join("\n\n")}`,
 
 /** 挟んだメールに添えるメモの上限(文字数)。一覧の 1 行に収まる長さ */
 export const BOOKMARK_NOTE_MAX = 80;
+/** キーワードの数と、1 つの長さの上限 */
+export const BOOKMARK_TAGS_MAX = 8;
+export const BOOKMARK_TAG_LENGTH = 20;
+
+export type BookmarkNote = { note: string; tags: string[] };
+
+export const bookmarkNoteSchema = {
+  type: "object",
+  properties: {
+    note: { type: "string" },
+    tags: { type: "array", items: { type: "string" } },
+  },
+  required: ["note", "tags"],
+  additionalProperties: false,
+} as const;
+
+/** キーワードを揃える。先頭の #・空白を取り、長さと数を抑え、重複(大文字・小文字の違いも)を除く */
+export function normalizeTags(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const seen = new Set<string>();
+  const tags: string[] = [];
+  for (const t of v) {
+    if (typeof t !== "string") continue;
+    const tag = t.replace(/^[#＃]+/, "").replace(/[\s#＃,、]+/g, "").slice(0, BOOKMARK_TAG_LENGTH);
+    if (!tag || seen.has(tag.toLowerCase())) continue;
+    seen.add(tag.toLowerCase());
+    tags.push(tag);
+    if (tags.length >= BOOKMARK_TAGS_MAX) break;
+  }
+  return tags;
+}
+
+/** DB に JSON で入れたキーワードを読む */
+export function parseTags(json: string): string[] {
+  try {
+    return normalizeTags(JSON.parse(json));
+  } catch {
+    return [];
+  }
+}
+
+export function normalizeBookmarkNote(v: unknown): BookmarkNote | null {
+  const r = v as { note?: unknown; tags?: unknown } | null;
+  if (!r || typeof r.note !== "string") return null;
+  const note = r.note.replace(/\s+/g, " ").replace(/^「|」$|。$/g, "").trim().slice(0, BOOKMARK_NOTE_MAX);
+  return { note, tags: normalizeTags(r.tags).slice(0, 4) };
+}
+
+/**
+ * 栞が提案したキーワードから、やり取りに出てくる人の名前(差出人・宛先)と同じものを除く。
+ * 指示文でも避けさせているが、小さいモデルは守らないことがあるため
+ */
+export function dropNameTags(tags: string[], mails: Pick<MailForPrompt, "from_name" | "to_text">[]): string[] {
+  const squash = (s: string) => s.replace(/[\s"'　]+/g, "").toLowerCase();
+  const names = new Set<string>();
+  for (const m of mails) {
+    for (const n of [m.from_name, ...m.to_text.split(/[,、]/).map((t) => t.replace(/<[^>]*>/g, ""))]) {
+      const name = squash(n);
+      if (name) names.add(name);
+    }
+  }
+  return tags.filter((t) => !names.has(squash(t)));
+}
 
 function threadMails(thread: (MailForPrompt & { sent: boolean })[], tag: string, last: string): string[] {
   return thread.map((m, i) => {
@@ -413,11 +476,16 @@ export function bookmarkNotePrompt(thread: (MailForPrompt & { sent: boolean })[]
     {
       role: "user",
       content: `受信者が次のやり取りの最後のメールを「読みかけ」として残しました(古い順に ${thread.length} 通)。
-後で戻ってきたときに思い出せるよう、「次に何をするか」を日本語のメモ 1 行(40 文字程度)で書いてください。
+後で戻ってきたときに思い出せるよう、次の 2 つを日本語で書いてください。
+note: 「次に何をするか」のメモ 1 行(40 文字程度)
 - 例: 「見積の金額を確かめてから返信する」「10/24 の会議の出欠を返す」
 - 期限が書かれていれば日付を入れる
 - 特にすることが無さそうなら、何の話かを 1 行で書く
-- メモの文だけを書く。前置き・かぎかっこ・句点は付けない
+- 前置き・かぎかっこ・句点は付けない
+tags: 後で探すときの短いキーワードを 2〜4 個(各 10 文字程度まで、# は付けない)
+- 相手の会社名、案件や商品の名前、話題(「見積」「請求書」「日程調整」など)から選ぶ
+- 人名(差出人・受信者本人)は入れない。差出人は検索で探せる
+- 「メール」「確認」のような、どのメールにも当てはまる語は避ける
 
 ${threadMails(thread, tag, "(挟んだメール)").join("\n\n")}`,
     },

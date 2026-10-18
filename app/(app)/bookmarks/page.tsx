@@ -3,10 +3,10 @@ import { Suspense } from "react";
 import { InfoButton } from "@/components/info-button";
 import { HELP } from "@/lib/help-texts";
 import { requireAccount } from "@/lib/accounts";
-import { shortDate } from "@/lib/format";
-import { listBookmarks } from "@/lib/queries";
+import { BookmarkList } from "@/components/bookmark-list";
+import { countBookmarkTags, listBookmarks } from "@/lib/queries";
 
-export default function BookmarksPage() {
+export default function BookmarksPage({ searchParams }: PageProps<"/bookmarks">) {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-4xl flex-col gap-4 p-4 sm:p-6">
@@ -15,41 +15,50 @@ export default function BookmarksPage() {
           <InfoButton title="読みかけ" markdown={HELP.bookmarks} />
         </h1>
         <Suspense fallback={<p className="text-muted">読み込み中…</p>}>
-          <Bookmarks />
+          <Bookmarks searchParams={searchParams} />
         </Suspense>
       </div>
     </div>
   );
 }
 
-async function Bookmarks() {
+const chipClass = "rounded-full border px-2.5 py-0.5 text-xs transition-colors";
+
+async function Bookmarks({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await searchParams;
+  const tag = typeof params.tag === "string" ? params.tag.slice(0, 40) : "";
   const account = requireAccount();
-  const items = await listBookmarks(account.id);
-  if (items.length === 0) return <p className="text-muted">挟んだメールはありません。メールを開いて「挟む」を押すと、ここに並びます。</p>;
+  const all = await listBookmarks(account.id);
+  if (all.length === 0) return <p className="text-muted">挟んだメールはありません。メールを開いて「挟む」を押すと、ここに並びます。</p>;
+  const items = tag ? all.filter((b) => b.tags.some((t) => t.toLowerCase() === tag.toLowerCase())) : all;
+  const tags = countBookmarkTags(all);
   return (
-    <ul className="flex flex-col gap-2">
-      {items.map((b) => (
-        <li key={b.messageId}>
+    <>
+      {tags.length > 0 ? (
+        <nav aria-label="キーワードで絞り込む" className="flex flex-wrap gap-1.5">
           <Link
-            href={`/mail/${b.mailbox}/${b.uid}`}
-            className="flex flex-col gap-1 rounded-xl border border-line bg-panel px-3.5 py-3 hover:border-accent/50"
+            href="/bookmarks"
+            aria-current={tag ? undefined : "page"}
+            className={`${chipClass} ${tag ? "border-line text-muted hover:text-foreground" : "border-accent bg-accent text-panel"}`}
           >
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="min-w-0 truncate font-medium">{b.subject || "(件名なし)"}</span>
-              {b.after > 0 ? (
-                <span className="shrink-0 rounded-full bg-accent-soft px-2 text-xs text-accent tabular-nums">その後 {b.after} 通</span>
-              ) : null}
-            </div>
-            <p className={b.note ? "" : "text-muted"}>{b.note || "メモなし"}</p>
-            <p className="flex gap-3 text-xs text-muted">
-              <span className="min-w-0 truncate">{b.from}</span>
-              <span className="shrink-0 tabular-nums">
-                {b.lastActivity ? `最新 ${shortDate(b.lastActivity)}` : `${shortDate(b.created)} に挟んだ`}
-              </span>
-            </p>
+            すべて {all.length}
           </Link>
-        </li>
-      ))}
-    </ul>
+          {tags.map((t) => {
+            const current = t.tag.toLowerCase() === tag.toLowerCase();
+            return (
+              <Link
+                key={t.tag}
+                href={`/bookmarks?tag=${encodeURIComponent(t.tag)}`}
+                aria-current={current ? "page" : undefined}
+                className={`${chipClass} ${current ? "border-accent bg-accent text-panel" : "border-accent/50 text-accent hover:bg-accent-soft"}`}
+              >
+                #{t.tag} <span className="tabular-nums">{t.count}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      ) : null}
+      {items.length === 0 ? <p className="text-muted">「#{tag}」の付いた読みかけはありません。</p> : <BookmarkList items={items} />}
+    </>
   );
 }
