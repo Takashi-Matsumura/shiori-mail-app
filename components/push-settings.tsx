@@ -116,7 +116,7 @@ export function PushSettings({ publicKey }: { publicKey: string }) {
       ) : null}
       {state === "off" ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-muted">新着メールが届いたら、この端末に差出人と件名を通知します。</p>
+          <p className="text-xs text-muted">栞が「要返信」と仕分けた新着メールを、この端末に差出人と件名で通知します。</p>
           <button type="button" onClick={subscribe} disabled={pending} className={button}>
             {pending ? "登録中…" : "通知を受け取る"}
           </button>
@@ -124,7 +124,7 @@ export function PushSettings({ publicKey }: { publicKey: string }) {
       ) : null}
       {state === "on" ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-muted">この端末で、新着メールの通知を受け取っています。</p>
+          <p className="text-xs text-muted">この端末で、「要返信」の新着メールの通知を受け取っています。</p>
           <div className="flex gap-2">
             <button type="button" onClick={test} disabled={pending} className={button}>
               テスト通知

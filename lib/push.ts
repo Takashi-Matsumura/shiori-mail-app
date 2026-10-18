@@ -1,14 +1,17 @@
 import "server-only";
 import webpush from "web-push";
 import type { Account } from "@/lib/accounts";
+import { classifyMessage } from "@/lib/ai/ops";
 import { getDb, getSetting, setSetting } from "@/lib/db";
+import type { MessageRow } from "@/lib/queries";
 
 // 新着メールの通知(Web Push)。送り先はブラウザのプッシュサーバ(Apple など)で、そこから端末へ届く。
 // 中身は端末の鍵で暗号化されるので、プッシュサーバには読めない。
+// 通知するのは、栞が「要返信」と仕分けた未読だけ。
 
 const VAPID_PUBLIC = "push_vapid_public";
 const VAPID_PRIVATE = "push_vapid_private";
-/** 通知済みの受信トレイのメールの、最大の messages.id */
+/** 通知するかを判断し終えた受信トレイのメールの、最大の messages.id */
 const LAST_NOTIFIED = "push_last_notified_id";
 /** これより多く届いたら、1 通ずつではなく「新着 N 通」の 1 件にまとめる */
 const MAX_SEPARATE = 3;
@@ -60,6 +63,8 @@ export function isSubscribed(endpoint: string): boolean {
 
 export function deleteSubscription(endpoint: string): void {
   getDb().prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").run(endpoint);
+  // 1 台も無くなったら判断済みの印も消す。次に登録したとき、止めていた間のメールをまとめて通知しないように
+  if (!hasSubscriptions()) getDb().prepare("DELETE FROM settings WHERE key = ?").run(LAST_NOTIFIED);
 }
 
 function maxInboxId(): number {
@@ -105,45 +110,69 @@ async function sendToAll(payloads: Payload[]): Promise<void> {
   }
 }
 
+const NOTIFY_CATEGORY = "要返信";
+
+/** 仕分けのカテゴリ。まだ仕分けていなければ栞に仕分けさせる。仕分けられなかったら null */
+async function categoryOf(id: number): Promise<string | null> {
+  const read = () =>
+    (
+      getDb()
+        .prepare("SELECT json_extract(result, '$.category') AS category FROM ai_results WHERE message_id = ? AND kind = 'classify'")
+        .get(id) as { category: string | null } | undefined
+    )?.category ?? null;
+  const done = read();
+  if (done) return done;
+  const m = getDb().prepare("SELECT * FROM messages WHERE id = ?").get(id) as MessageRow | undefined;
+  if (!m) return null;
+  try {
+    await classifyMessage(m);
+  } catch (e) {
+    console.error(`通知の前の仕分けに失敗しました: ${e instanceof Error ? e.message : String(e)}`);
+    return null;
+  }
+  return read();
+}
+
 /**
- * まだ通知していない受信トレイの未読を通知する。同期のあと(画面からでも、裏の定期同期からでも)に呼ぶ。
- * 通知済みの印は送る前に進めるので、同期が重なっても同じメールを 2 回通知しない(node:sqlite は同期的に動く)。
+ * まだ判断していない受信トレイの新着を栞に仕分けさせ、「要返信」の未読だけを通知する。裏の定期同期のあとに呼ぶ
+ * (画面からの同期で取り込んだメールも、次の回でここを通る)。仕分けられなかったメールは、取りこぼさないよう通知する。
  */
 export async function notifyNewMail(account: Account): Promise<void> {
   const last = getSetting(LAST_NOTIFIED);
   if (last === undefined) return; // まだ 1 台も登録していない
   const rows = getDb()
     .prepare(
-      `SELECT id, uid, seen, from_name, from_addr, subject FROM messages
+      `SELECT id, uid, from_name, from_addr, subject FROM messages
        WHERE account = ? AND mailbox = 'inbox' AND id > ? ORDER BY id`,
     )
-    .all(account.id, Number(last)) as {
-    id: number;
-    uid: number;
-    seen: number;
-    from_name: string | null;
-    from_addr: string | null;
-    subject: string | null;
-  }[];
+    .all(account.id, Number(last)) as { id: number; uid: number; from_name: string | null; from_addr: string | null; subject: string | null }[];
   if (rows.length === 0) return;
-  setSetting(LAST_NOTIFIED, String(rows[rows.length - 1].id));
-  // 他のメーラーで既に読んだものは知らせない
-  const unseen = rows.filter((r) => !r.seen);
-  if (unseen.length === 0 || !hasSubscriptions()) return;
 
-  const sender = (r: (typeof unseen)[number]) => r.from_name || r.from_addr || "(差出人なし)";
+  type Row = (typeof rows)[number] & { category: string | null };
+  const targets: Row[] = [];
+  for (const r of rows) {
+    const category = await categoryOf(r.id);
+    // 仕分けている間に、画面や他のメーラーで読んだものは知らせない
+    const seen = getDb().prepare("SELECT seen FROM messages WHERE id = ?").get(r.id) as { seen: number } | undefined;
+    if ((category === NOTIFY_CATEGORY || category === null) && seen && !seen.seen) targets.push({ ...r, category });
+  }
+  setSetting(LAST_NOTIFIED, String(rows[rows.length - 1].id));
+  if (targets.length === 0 || !hasSubscriptions()) return;
+
+  const sender = (r: Row) => r.from_name || r.from_addr || "(差出人なし)";
+  const label = (r: Row) => (r.category ? r.category : "仕分けできなかった新着");
   const payloads: Payload[] =
-    unseen.length <= MAX_SEPARATE
-      ? unseen.map((r) => ({
-          title: sender(r),
+    targets.length <= MAX_SEPARATE
+      ? targets.map((r) => ({
+          title: `${label(r)}: ${sender(r)}`,
           body: r.subject || "(件名なし)",
           url: `/mail/inbox/${r.uid}`,
           tag: `mail-${r.id}`,
         }))
       : [
           {
-            title: `新着 ${unseen.length} 通`,
-            body: unseen
+            title: `${targets.every((r) => r.category) ? "要返信" : "要返信など"} ${targets.length} 通`,
+            body: targets
               .slice(-MAX_SEPARATE)
               .reverse()
               .map((r) => `${sender(r)}: ${r.subject || "(件名なし)"}`)
