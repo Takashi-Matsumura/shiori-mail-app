@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
+import type { SenderAuth } from "@/lib/mail/sender-auth";
 
 const SEPARATORS = /[\s<>,;"']+/;
 const MAX_REFS = 50;
@@ -16,7 +17,7 @@ function addresses(text: string): string[] {
     .map((a) => a.toLowerCase());
 }
 
-type Headers = { messageId: string | null; inReplyTo: string | null; refs: string[]; fromAddr: string };
+type Headers = { messageId: string | null; inReplyTo: string | null; refs: string[]; fromAddr: string; senderAuth: SenderAuth };
 
 /** 手元のメールのどれかが、この値を Message-ID かスレッドとして使っているか */
 function taken(db: DatabaseSync, account: string, key: string): boolean {
@@ -50,12 +51,14 @@ function storedThread(db: DatabaseSync, account: string, messageId: string): str
  * - 返信元(In-Reply-To)が手元にあれば、そのスレッド。返信元が References に別のスレッドを書いていても引きずられない
  * - 無ければ References の先頭(返信元を取り込んでいないやり取りも、送信済みどうしでまとめるため)。
  *   ただし、受信したメールを含むスレッドと同じ値なら使わない
- * 受信したメール: 次の両方を満たすときだけ既存のスレッドに入れる
+ * 受信したメール: 次のすべてを満たすときだけ既存のスレッドに入れる
+ * - 差出人が偽装されていそうでない(受信サーバの認証結果。lib/mail/sender-auth.ts)
  * - 参照しているメールが手元にある
- * - 差出人が、そのスレッドの From・To・Cc のどこかに出てくる(やり取りの参加者)
+ * - 差出人が、そのスレッドの From・To・Cc のどこかに出てくる(やり取りの参加者)。利用者自身のアドレスは数えない。
+ *   数えると、From を利用者自身に偽装するだけで、どのスレッドの参加者にもなれてしまう(宛先には必ず利用者が入るため)
  * どれにも当たらなければ、そのメールだけのスレッドにする。
  */
-export function threadKeyFor(db: DatabaseSync, account: string, mailbox: string, uid: number, mail: Headers): string {
+export function threadKeyFor(db: DatabaseSync, account: string, mailbox: string, uid: number, mail: Headers, selfAddresses: string[] = []): string {
   if (mailbox === "sent") {
     const parent = mail.inReplyTo ? storedThread(db, account, mail.inReplyTo) : null;
     if (parent) return parent;
@@ -67,10 +70,11 @@ export function threadKeyFor(db: DatabaseSync, account: string, mailbox: string,
   }
 
   const sender = mail.fromAddr.toLowerCase();
+  const self = new Set(selfAddresses.map((a) => a.toLowerCase()));
   // References は送り手がいくらでも並べられる。直前のメール(In-Reply-To と References の末尾)から MAX_REFS 件だけ見る
   const recent = [mail.inReplyTo, ...mail.refs.slice(-MAX_REFS)];
   const referenced = [...new Set(recent.filter((id): id is string => Boolean(id)))];
-  if (sender && referenced.length > 0) {
+  if (mail.senderAuth === "ok" && sender && !self.has(sender) && referenced.length > 0) {
     const candidates = db
       .prepare(
         `SELECT DISTINCT thread_key FROM messages
@@ -80,7 +84,7 @@ export function threadKeyFor(db: DatabaseSync, account: string, mailbox: string,
     const participants = db.prepare("SELECT from_addr, to_text, cc_text FROM messages WHERE account = ? AND thread_key = ?");
     for (const { thread_key } of candidates) {
       const rows = participants.all(account, thread_key) as { from_addr: string; to_text: string; cc_text: string }[];
-      if (rows.some((r) => addresses(`${r.from_addr} ${r.to_text} ${r.cc_text}`).includes(sender))) return thread_key;
+      if (rows.some((r) => addresses(`${r.from_addr} ${r.to_text} ${r.cc_text}`).some((a) => a === sender && !self.has(a)))) return thread_key;
     }
   }
   return ownKey(db, account, mailbox, uid, mail.messageId);

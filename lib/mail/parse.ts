@@ -103,7 +103,7 @@ export async function parseRaw(raw: Buffer): Promise<ParsedMail> {
       contentType: a.contentType,
       size: a.size,
     })),
-    senderAuth: senderAuthFrom(mail.headerLines),
+    senderAuth: senderAuthFrom(mail.headerLines, from?.address),
   };
 }
 

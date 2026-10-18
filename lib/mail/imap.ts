@@ -159,7 +159,7 @@ async function fetchAndStore(client: ImapFlow, account: Account, slug: MailboxSl
     // 日付はサーバが受け取った時刻(INTERNALDATE)。ヘッダの Date は送り手が自由に書けるので、
     // 過去の日付にして返信済み・完了の扱いを引き継がせる(lib/queries.ts の REPLIED_SQL・DONE_SQL)ことができてしまう
     const received = m.internalDate ? new Date(m.internalDate) : (p.date ?? new Date());
-    const threadKey = threadKeyFor(db, account.id, slug, m.uid, p);
+    const threadKey = threadKeyFor(db, account.id, slug, m.uid, p, [account.email]);
     insert.run(
       account.id,
       slug,
