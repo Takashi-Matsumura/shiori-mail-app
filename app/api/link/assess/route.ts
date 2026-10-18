@@ -33,7 +33,10 @@ function allowCall(now = Date.now()): boolean {
  * そこに AI 向けの指示を混ぜて「特に気になる点なし」と答えさせられても、危険・注意の手がかりがあるときは「気になる点あり」に引き上げる
  */
 function clampToChecks(assessment: LinkAssessment, levels: LinkWarning["level"][]): LinkAssessment {
-  if (assessment.verdict !== "特に気になる点なし" || !levels.some((l) => l === "危険" || l === "注意")) return assessment;
+  const flagged = levels.some((l) => l === "危険" || l === "注意");
+  if (!flagged || assessment.verdict === "危険そう") return assessment;
+  // 危険・注意の手がかりがあるのに栞が緩い判定を返したときは、理由の文も AI の出力ではなく決まった文にする。
+  // URL や表示の文字に指示を混ぜて「公式です、安心です」と理由に書かせても、画面に出ないように
   return { verdict: "気になる点あり", reason: "上の警告(機械的な手がかり)があるので、行き先を確かめてから開いてください。" };
 }
 
