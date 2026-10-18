@@ -3,7 +3,9 @@
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { FORWARD_INTRO_KEY, REAL_SETTING_KEYS, SIGNATURE_KEY, buildRealAccount, getAccount, getRealAccountFields, getRealPassword } from "@/lib/accounts";
+import { getAiConfig } from "@/lib/ai/config";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
+import { isNewExternalUrl } from "@/lib/ai/loopback";
 import { saveAiResult } from "@/lib/ai/ops";
 import { CATEGORIES, PRIORITIES } from "@/lib/ai/prompts";
 import { requireSession } from "@/lib/auth/session";
@@ -195,6 +197,19 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
       valid = ["http:", "https:"].includes(u.protocol) && !u.username && !u.password;
     } catch {}
     if (!valid) return { ok: false, section: "ai", message: "AI のベース URL は http:// か https:// で始まる URL にしてください。" };
+  }
+  // このマシンの外の AI サーバへ切り替えると、自動処理のたびに新着メールの本文が送られる。
+  // 既定の「ローカル AI だけ」から外れるので、画面での同意が無ければ保存しない(画面を通さない送信も断る)
+  const current = getAiConfig();
+  if (
+    (isNewExternalUrl(baseUrl, current.baseUrl) || isNewExternalUrl(embedBaseUrl, current.embedBaseUrl)) &&
+    field("aiExternalConsent") !== "on"
+  ) {
+    return {
+      ok: false,
+      section: "ai",
+      message: "このマシンの外の AI サーバを使うには、メールの本文がその宛先へ送られることへの同意にチェックを入れてください。",
+    };
   }
   if (real.password) {
     if (!keychainAvailable) return { ok: false, message: "パスワードの保存先(キーチェーン)は macOS でだけ使えます。" };
