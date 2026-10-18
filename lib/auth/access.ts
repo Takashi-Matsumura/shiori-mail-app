@@ -17,14 +17,16 @@ const FETCH_TIMEOUT_MS = 5_000;
 // 時計のずれの許容(秒)
 const SKEW_S = 60;
 
-type AccessConfig = { teamDomain: string; aud: string };
+type AccessConfig = { teamDomain: string; aud: string; emails: string[] };
 
 let warned = false;
 
 function accessConfig(): AccessConfig | null {
   const teamDomain = process.env.MAILER_ACCESS_TEAM_DOMAIN?.trim().toLowerCase() ?? "";
   const aud = process.env.MAILER_ACCESS_AUD?.trim() ?? "";
-  if (TEAM_DOMAIN.test(teamDomain) && AUD.test(aud)) return { teamDomain, aud };
+  // 任意。書いてあれば、Access でログインしたメールアドレスもこの中のものに限る(Access のポリシーを広げすぎる誤設定への備え)
+  const emails = (process.env.MAILER_ACCESS_EMAILS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (TEAM_DOMAIN.test(teamDomain) && AUD.test(aud)) return { teamDomain, aud, emails };
   if (!warned) {
     warned = true;
     console.error("MAILER_ACCESS_TEAM_DOMAIN / MAILER_ACCESS_AUD が未設定か不正なため、公開ホストへのリクエストはすべて断ります。docs/cloudflare.md を参照してください。");
@@ -35,6 +37,8 @@ function accessConfig(): AccessConfig | null {
 type KeySet = { teamDomain: string; keys: Map<string, KeyObject>; fetched: number };
 let keySet: KeySet | null = null;
 let pending: Promise<KeySet | null> | null = null;
+// 取り直しを試みた時刻(失敗したときも含む)。失敗が続く間に、知らない kid のたびに取りに行かないため
+let lastAttempt = 0;
 
 async function fetchKeys(teamDomain: string): Promise<KeySet | null> {
   try {
@@ -65,8 +69,9 @@ async function keyFor(teamDomain: string, kid: string): Promise<KeyObject | null
   const fresh = current && now - current.fetched < KEYS_TTL_MS;
   const found = current?.keys.get(kid);
   if (found && fresh) return found;
-  // 期限切れか知らない kid。直前に取ったばかりなら取り直さない(でたらめな kid で Cloudflare を叩かせない)
-  if (current && now - current.fetched < REFETCH_MIN_MS) return found ?? null;
+  // 期限切れか知らない kid。直前に取りに行ったばかり(失敗を含む)なら取り直さない(でたらめな kid で Cloudflare を叩かせない)
+  if (now - lastAttempt < REFETCH_MIN_MS) return found ?? null;
+  lastAttempt = now;
   pending ??= fetchKeys(teamDomain).finally(() => (pending = null));
   const next = await pending;
   if (next) keySet = next;
@@ -82,10 +87,14 @@ export async function verifyAccessJwt(token: string, config: AccessConfig, now =
   if (parts.length !== 3) return false;
   const [h, p, s] = parts;
   let header: { alg?: unknown; kid?: unknown };
-  let claims: { iss?: unknown; aud?: unknown; exp?: unknown; nbf?: unknown };
+  let claims: { iss?: unknown; aud?: unknown; exp?: unknown; nbf?: unknown; email?: unknown };
   try {
-    header = decodeJson(h) as typeof header;
-    claims = decodeJson(p) as typeof claims;
+    const rawHeader: unknown = decodeJson(h);
+    const rawClaims: unknown = decodeJson(p);
+    // JSON としては正しくても object でないもの(null、数値、配列)は、下でプロパティを読むと例外になるので先に断る
+    if (!isRecord(rawHeader) || !isRecord(rawClaims)) return false;
+    header = rawHeader;
+    claims = rawClaims;
   } catch {
     return false;
   }
@@ -96,14 +105,18 @@ export async function verifyAccessJwt(token: string, config: AccessConfig, now =
 
   const nowS = now / 1000;
   const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  const emailOk = config.emails.length === 0 || (typeof claims.email === "string" && config.emails.includes(claims.email.toLowerCase()));
   return (
     claims.iss === `https://${config.teamDomain}` &&
     aud.includes(config.aud) &&
+    emailOk &&
     typeof claims.exp === "number" &&
     claims.exp + SKEW_S > nowS &&
     (claims.nbf === undefined || (typeof claims.nbf === "number" && claims.nbf - SKEW_S <= nowS))
   );
 }
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 /** このリクエストが Cloudflare Access を通ってきたか */
 export async function passedAccess(headers: Headers): Promise<boolean> {

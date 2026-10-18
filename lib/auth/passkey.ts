@@ -92,10 +92,10 @@ export async function verifyRegistration(
     requireUserVerification: true,
   });
   if (!verified) return false;
-  if (invite !== undefined && !consumeInvite(invite)) return false;
   const { credential } = registrationInfo;
-  const res = getDb()
-    .prepare("INSERT INTO passkeys (id, rp_id, public_key, counter, transports, created) VALUES (?, ?, ?, ?, ?, ?)")
+  const db = getDb();
+  const res = db
+    .prepare("INSERT OR IGNORE INTO passkeys (id, rp_id, public_key, counter, transports, created) VALUES (?, ?, ?, ?, ?, ?)")
     .run(
       credential.id,
       site.rpId,
@@ -104,7 +104,14 @@ export async function verifyRegistration(
       credential.transports ? JSON.stringify(credential.transports) : null,
       Date.now(),
     );
-  return res.changes === 1;
+  if (res.changes !== 1) return false;
+  // 招待の使い切りは保存のあとに行う。先に使い切ると、保存に失敗したとき招待だけが消えて、やり直せなくなる。
+  // 使い切れなかった(同時に別の登録が使った)ときは、いま保存した分を取り消す
+  if (invite !== undefined && !consumeInvite(invite)) {
+    db.prepare("DELETE FROM passkeys WHERE id = ?").run(credential.id);
+    return false;
+  }
+  return true;
 }
 
 export async function authenticationOptions(site: Site) {
