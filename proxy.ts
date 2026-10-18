@@ -53,5 +53,6 @@ const escapeHtml = (s: string) =>
 export const config = {
   // ビルド済みの JS・CSS、アイコン、マニフェストは、メールの内容を含まないので素通しにする。
   // ホーム画面に追加するとき、ブラウザはマニフェストとアイコンをログインの Cookie を付けずに取りに来ることがある
-  matcher: "/((?!_next/|icon\\.svg$|favicon\\.ico$|apple-icon\\.png$|manifest\\.webmanifest$|icons/).*)",
+  // 通知用の Service Worker(sw.js)も、メールの内容を含まない固定のファイル
+  matcher: "/((?!_next/|icon\\.svg$|favicon\\.ico$|apple-icon\\.png$|manifest\\.webmanifest$|icons/|sw\\.js$).*)",
 };

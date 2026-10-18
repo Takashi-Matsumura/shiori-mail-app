@@ -1,10 +1,12 @@
 import { Suspense } from "react";
 import { PalettePicker } from "@/components/palette-picker";
 import { SettingsForm } from "@/components/settings-form";
+import { PushSettings } from "@/components/push-settings";
 import { getAccount, getForwardIntro, getRealAccountFields, getSignature, type Account } from "@/lib/accounts";
 import { keychainAvailable, readPassword } from "@/lib/keychain";
 import { AiError, probeServer } from "@/lib/ai/client";
 import { DEFAULT_AI_BASE_URL, getAiConfig } from "@/lib/ai/config";
+import { vapidPublicKey } from "@/lib/push";
 import { io } from "next/cache";
 
 export default function SettingsPage() {
@@ -46,27 +48,30 @@ async function Settings() {
   const describe = (a: Account) =>
     `IMAP ${a.imap.host}:${a.imap.port}${a.imap.secure ? " (TLS)" : ""} / SMTP ${a.smtp.host}:${a.smtp.port}${a.smtp.secure ? " (TLS)" : ""}`;
   return (
-    <SettingsForm
-      account={account ? { email: account.email, servers: describe(account) } : null}
-      realFields={getRealAccountFields()}
-      passwordSource={passwordSource}
-      keychainAvailable={keychainAvailable}
-      ai={{
-        baseUrl: cfg.baseUrl,
-        embedBaseUrl: separateEmbed ? cfg.embedBaseUrl : "",
-        chatModel: cfg.chatModel,
-        embedModel: cfg.embedModel,
-        thinking: cfg.thinking,
-        classifyKnn: cfg.classifyKnn,
-      }}
-      defaultBaseUrl={DEFAULT_AI_BASE_URL}
-      chatModels={chatModels}
-      embedModels={embedModels}
-      inUse={{ server: chat.server, model: cfg.chatModel || chatModels[0] || "" }}
-      chatError={chat.error}
-      embedError={separateEmbed ? embed.error : null}
-      signature={getSignature()}
-      forwardIntro={getForwardIntro()}
-    />
+    <>
+      <SettingsForm
+        account={account ? { email: account.email, servers: describe(account) } : null}
+        realFields={getRealAccountFields()}
+        passwordSource={passwordSource}
+        keychainAvailable={keychainAvailable}
+        ai={{
+          baseUrl: cfg.baseUrl,
+          embedBaseUrl: separateEmbed ? cfg.embedBaseUrl : "",
+          chatModel: cfg.chatModel,
+          embedModel: cfg.embedModel,
+          thinking: cfg.thinking,
+          classifyKnn: cfg.classifyKnn,
+        }}
+        defaultBaseUrl={DEFAULT_AI_BASE_URL}
+        chatModels={chatModels}
+        embedModels={embedModels}
+        inUse={{ server: chat.server, model: cfg.chatModel || chatModels[0] || "" }}
+        chatError={chat.error}
+        embedError={separateEmbed ? embed.error : null}
+        signature={getSignature()}
+        forwardIntro={getForwardIntro()}
+      />
+      <PushSettings publicKey={vapidPublicKey()} />
+    </>
   );
 }

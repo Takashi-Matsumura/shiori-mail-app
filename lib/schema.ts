@@ -150,6 +150,14 @@ CREATE TABLE IF NOT EXISTS compose_drafts (
   saved INTEGER NOT NULL
 );
 
+-- 新着の通知(Web Push)の送り先。ホーム画面に追加した iPhone などが、設定画面で登録する
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  endpoint TEXT PRIMARY KEY,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
