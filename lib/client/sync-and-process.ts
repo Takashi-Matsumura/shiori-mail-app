@@ -2,6 +2,7 @@
 
 import { syncAction } from "@/app/actions";
 import type { StreamEvent } from "@/lib/ai/stream";
+import { checkSession, lockIfUnauthorized } from "@/lib/client/lock";
 
 // 仕分けは似たメールの埋め込みを使うので、索引づくりを先に済ませる。
 // やり取りが終わっていそうかは、仕分け(要返信などか)を見て決めるので、仕分けのあとに置く
@@ -20,6 +21,7 @@ async function runBatch(kind: string, signal: AbortSignal, onProgress: (done: nu
     body: JSON.stringify({ kind }),
     signal,
   });
+  if (lockIfUnauthorized(res.status)) return "セッションが切れたのでロックします";
   if (!res.ok || !res.body) return `HTTP ${res.status}`;
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -86,7 +88,11 @@ export async function syncAndProcess({ signal, report, onStepDone }: {
       return "ran" as const;
     });
   } catch (e) {
-    if (!signal.aborted) report({ kind: "error", text: e instanceof Error ? `処理に失敗しました (${e.message})` : "処理に失敗しました" });
+    if (signal.aborted) return "ran";
+    report({ kind: "error", text: e instanceof Error ? `処理に失敗しました (${e.message})` : "処理に失敗しました" });
+    // Server Action(syncAction)はセッションが切れていると 401 で失敗し、ここに例外として届く。
+    // 失敗の理由がそれなら画面に残さずロックする(本番の再起動などで失敗したときは、セッションが有効なので何も起きない)
+    void checkSession();
     return "ran";
   }
 }

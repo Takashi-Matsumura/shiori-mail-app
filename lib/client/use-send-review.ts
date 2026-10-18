@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReviewResponse } from "@/lib/ai/prompts";
+import { lockIfUnauthorized } from "@/lib/client/lock";
 
 export type ReviewPayload = { to: string; cc: string; subject: string; text: string; replyTo?: number; attachments?: number };
 export type ReviewState =
@@ -33,6 +34,7 @@ export function useSendReview() {
         body: JSON.stringify(payload),
         signal: ac.signal,
       });
+      if (lockIfUnauthorized(res.status)) return;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result = (await res.json()) as ReviewResponse;
       if (controller.current === ac) setState({ status: "done", result });
