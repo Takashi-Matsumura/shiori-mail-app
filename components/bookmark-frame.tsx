@@ -29,7 +29,7 @@ const AUTO_NOTE_MS = 60_000;
 const buttonClass = "rounded-full border border-accent px-3 py-1 text-xs text-accent transition-colors hover:bg-accent-soft disabled:opacity-60";
 
 /**
- * 挟んだメール(読みかけ)の枠。広い画面ではメール(children)の右に縦長の栞を立て、狭い画面では上に横長の帯を出す。
+ * 挟んだメール(読みかけ)の枠。本文の列が広ければメール(children)の右に縦長の栞を立て、狭ければ上に横長の帯を出す。
  * どちらも押すと、メモ・キーワード・その後のメールとあらすじのパネルが開く。
  */
 export function BookmarkFrame({ children, ...props }: BookmarkFrameProps & { children: React.ReactNode }) {
@@ -49,11 +49,11 @@ export function BookmarkFrame({ children, ...props }: BookmarkFrameProps & { chi
   const status = noteStream.state.running ? "栞が書いています…" : note || "メモなし";
   return (
     <>
-      {/* 狭い画面: メールの上に横長の帯 */}
+      {/* 本文の列が狭いとき: メールの上に横長の帯(列の幅は、メール画面の article の @container で測る) */}
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 rounded-xl border border-accent/40 bg-accent-soft/40 px-3.5 py-2.5 text-left md:hidden [&_svg]:size-4 [&_svg]:shrink-0"
+        className="flex items-center gap-2 rounded-xl border border-accent/40 bg-accent-soft/40 px-3.5 py-2.5 text-left @lg:hidden [&_svg]:size-4 [&_svg]:shrink-0"
       >
         <span className="text-accent">
           <BookmarkIcon />
@@ -84,7 +84,7 @@ function Ribbon({ status, tags, created, after, onOpen }: { status: string; tags
       onClick={onOpen}
       aria-label={`読みかけ: ${status}(押すと詳しく開く)`}
       title="押すと、メモ・キーワード・その後のメールを開きます"
-      className="sticky top-4 hidden w-24 shrink-0 flex-col items-center drop-shadow-sm transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-accent md:flex"
+      className="sticky top-4 hidden w-24 shrink-0 flex-col items-center drop-shadow-sm transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-accent @lg:flex"
     >
       {/* 紐 */}
       <span aria-hidden="true" className="size-2.5 rounded-full border-2 border-accent/60" />
