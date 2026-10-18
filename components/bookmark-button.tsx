@@ -6,7 +6,7 @@ import { AquaButton } from "@/components/aqua-button";
 import { BookmarkIcon } from "@/components/icons";
 
 /**
- * メールを「挟む」(読みかけにする)/外すボタン。挟むと、メールの上に帯が出て、栞がメモを書く(components/bookmark-band.tsx)。
+ * メールを「挟む」(読みかけにする)/外すボタン。挟むと、メールの右に栞(狭い画面では上に帯)が出て、栞がメモとキーワードを書く(components/bookmark-frame.tsx)。
  */
 export function BookmarkButton({ messageId, bookmarked }: { messageId: number; bookmarked: boolean }) {
   const [pending, startTransition] = useTransition();
