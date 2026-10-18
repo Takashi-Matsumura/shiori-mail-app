@@ -1,13 +1,17 @@
 import "server-only";
+import { getDomain } from "tldts";
 
 /**
  * 差出人(From)が偽装されていないかを、受信サーバの認証結果(Authentication-Results、RFC 8601)から読む。
  * - fail: DMARC に失敗した。差出人のドメインを名乗る資格の無い送信元から届いた
- * - unverified: DMARC の結果が無く、SPF・DKIM のどちらも通っていない
+ * - unverified: DMARC の結果が無く、From のドメインと揃った(アラインメントのある)SPF・DKIM の成功も無い
  * - ok: 確かめられた、または信頼できる認証結果が無い(Gmail 以外のサーバなど)。どちらも画面には何も出さない
  *
  * 認証結果のヘッダは送り手もメールに書き込めるので、信じるのは一番上のもの(最後に受け取った自分側のサーバが付けたもの)で、
  * かつ付けたサーバ(authserv-id)が信頼できるものだけ。偽の「成功」を書かれても警告が出ないだけで、本物らしく見せる表示はしない。
+ *
+ * DMARC の結果が無いときは、SPF・DKIM の成功を「From のドメインと揃っているもの」に限る。
+ * 揃っているかを見ないと、攻撃者が自分のドメインで SPF・DKIM を通し、From だけ他人のドメインにしても警告が出ない。
  */
 export type SenderAuth = "fail" | "unverified" | "ok";
 
@@ -19,7 +23,29 @@ function trustedAuthservIds(): string[] {
   return env?.length ? env : DEFAULT_AUTHSERV_IDS;
 }
 
-export function senderAuthFrom(headerLines: readonly { key: string; line: string }[]): SenderAuth {
+type MethodResult = { method: string; result: string; props: Map<string, string> };
+
+/** `dkim=pass header.i=@x.example header.s=sel` のような 1 区切りを、方式・結果・付随する値に分ける */
+function parseResult(segment: string): MethodResult | null {
+  const tokens = segment.trim().split(/\s+/).filter(Boolean);
+  const head = tokens.shift()?.match(/^([a-z0-9-]+)=([a-z]+)$/i);
+  if (!head) return null;
+  const props = new Map<string, string>();
+  for (const t of tokens) {
+    const eq = t.indexOf("=");
+    if (eq > 0) props.set(t.slice(0, eq).toLowerCase(), t.slice(eq + 1));
+  }
+  return { method: head[1].toLowerCase(), result: head[2].toLowerCase(), props };
+}
+
+/** `@x.example`・`user@x.example`・`x.example` のどれでも、組織を表すドメイン(登録ドメイン)にそろえる */
+function orgDomain(value: string | undefined): string | null {
+  if (!value) return null;
+  const host = value.slice(value.lastIndexOf("@") + 1).toLowerCase().replace(/\.$/, "");
+  return host ? (getDomain(host) ?? host) : null;
+}
+
+export function senderAuthFrom(headerLines: readonly { key: string; line: string }[], fromAddr: string | undefined): SenderAuth {
   const top = headerLines.find((h) => h.key.toLowerCase() === "authentication-results");
   if (!top) return "ok";
   // 折り返しをつなぎ、( ) のコメントを取り除く(コメントには送り手由来のアドレスなどが入る)
@@ -31,12 +57,21 @@ export function senderAuthFrom(headerLines: readonly { key: string; line: string
   const authserv = id.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   if (!trustedAuthservIds().includes(authserv)) return "ok";
 
-  const results = (method: string) =>
-    [...rest.join(";").matchAll(new RegExp(`(?:^|[\\s;])${method}=([a-z]+)`, "gi"))].map((m) => m[1].toLowerCase());
-  const dmarc = results("dmarc");
+  const results = rest.map(parseResult).filter((r): r is MethodResult => r !== null);
+  const dmarc = results.filter((r) => r.method === "dmarc").map((r) => r.result);
   if (dmarc.includes("fail")) return "fail";
   if (dmarc.includes("pass")) return "ok";
-  return results("spf").includes("pass") || results("dkim").includes("pass") ? "ok" : "unverified";
+
+  // DMARC の結果が無いときは、From と同じ組織のドメインで成功した SPF か DKIM があるかを見る(DMARC の relaxed alignment と同じ基準)
+  const from = orgDomain(fromAddr);
+  if (!from) return "unverified";
+  const aligned = results.some((r) => {
+    if (r.result !== "pass") return false;
+    if (r.method === "dkim") return orgDomain(r.props.get("header.d") ?? r.props.get("header.i")) === from;
+    if (r.method === "spf") return orgDomain(r.props.get("smtp.mailfrom") ?? r.props.get("smtp.helo")) === from;
+    return false;
+  });
+  return aligned ? "ok" : "unverified";
 }
 
 /** URL などで受け取った値を SenderAuth にする。知らない値は ok(何も出さない) */
@@ -52,6 +87,6 @@ export const SENDER_AUTH_WARNING: Record<Exclude<SenderAuth, "ok">, { level: "�
   },
   unverified: {
     level: "注意",
-    message: "送信元を確かめられませんでした(SPF・DKIM とも未確認)。差出人の表示をうのみにしないでください。",
+    message: "送信元を確かめられませんでした(差出人のドメインで通った SPF・DKIM がありません)。差出人の表示をうのみにしないでください。",
   },
 };
