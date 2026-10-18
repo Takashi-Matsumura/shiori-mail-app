@@ -45,11 +45,20 @@ SSL/TLS の Always Use HTTPS はドメイン全体に効くので、他のサイ
 
 ## 3. アプリの設定
 
-`.env.local` に公開ホスト名を書く。
+`.env.local` に、公開ホスト名と Access の 2 つの値を書く。
 
 ```
 MAILER_PUBLIC_HOST=mail.example.com
+MAILER_ACCESS_TEAM_DOMAIN=<チーム名>.cloudflareaccess.com
+MAILER_ACCESS_AUD=<Application Audience (AUD) Tag>
 ```
+
+- チーム名: Zero Trust → Settings → Custom Pages(または General)の Team domain
+- AUD: Zero Trust → Access → Applications → 1 で作ったアプリ → Overview の Application Audience (AUD) Tag
+
+アプリは、Access が付ける JWT(`Cf-Access-Jwt-Assertion`)の署名・発行元・AUD・期限を確かめ、合わないリクエストを 403 で断る。
+Access の設定を誤ったり、Tunnel 以外の経路で届いたりしても、パスキーだけが残る状態にしないため。
+2 つの値が無いか不正なときは、公開ホストへのリクエストをすべて断る(localhost はそのまま使える)。
 
 本番ビルドで起動する(dev サーバは外に出さない)。
 
@@ -143,5 +152,6 @@ iCloud キーチェーンのパスキーなら、Apple の他の端末にも同�
 ## 確かめること
 
 - Access を通らずに `https://mail.example.com` を開くと、Cloudflare Access のログイン画面へ転送される
+- Access を通ったあとは、ふだんどおり開ける(403 になるなら `MAILER_ACCESS_*` の値とアプリのログを確かめる)
 - `http://mail.example.com` は HTTPS へ転送される
 - 招待リンクは 2 回目には使えない

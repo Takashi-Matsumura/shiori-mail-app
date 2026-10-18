@@ -2,7 +2,7 @@ import "server-only";
 
 /**
  * アプリを開ける名前。localhost(この Mac)と、外から入るための公開ホスト名(MAILER_PUBLIC_HOST)の 2 つだけ。
- * 公開ホストは Cloudflare Tunnel の先にあり、Cloudflare Access を通ったリクエストだけが届く前提。
+ * 公開ホストは Cloudflare Tunnel の先にあり、Cloudflare Access を通ったリクエストだけを受ける(proxy が lib/auth/access.ts で確かめる)。
  */
 export type Site = {
   /** パスキーの RP ID。パスキーはこの名前ごとに別物になる */
