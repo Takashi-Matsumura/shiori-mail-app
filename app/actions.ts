@@ -15,6 +15,7 @@ import { TrashError, importOlder, moveToTrash, setSeenFlag, syncAccount, verifyI
 import { ATTACH_MAX_FILES, ATTACH_MAX_TOTAL } from "@/lib/mail/limits";
 import { extractAttachments, type AttachmentContent } from "@/lib/mail/parse";
 import { sendMail, verifySmtp, type SendResult } from "@/lib/mail/smtp";
+import { notifyNewMail } from "@/lib/push";
 
 /** section は、入力の誤りがどの欄のものか(設定画面で、その欄を開いて見せるため) */
 export type ActionState = { ok: boolean; message: string; section?: "account" | "ai" } | null;
@@ -46,6 +47,8 @@ export async function syncAction(): Promise<ActionState> {
   if (!account) return { ok: false, message: NO_ACCOUNT };
   try {
     const count = await syncAccount(account);
+    // 画面からの同期で取り込んだ新着も、他の端末(iPhone など)へ通知する。通知の失敗で同期を失敗扱いにはしない
+    await notifyNewMail(account).catch((e) => console.error(e));
     refresh();
     return { ok: true, message: count > 0 ? `${count} 通を取り込みました` : "新着はありません" };
   } catch (e) {
