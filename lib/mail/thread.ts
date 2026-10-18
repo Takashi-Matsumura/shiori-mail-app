@@ -2,12 +2,18 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
-const ADDRESS = /[^\s<>,;"']+@[^\s<>,;"']+/g;
+const SEPARATORS = /[\s<>,;"']+/;
 const MAX_REFS = 50;
 
-/** From・To・Cc の表示文字列から、メールアドレスだけを小文字で取り出す */
+/**
+ * From・To・Cc の表示文字列から、メールアドレスだけを小文字で取り出す。
+ * 区切り文字で分けてから `@` を含むものを選ぶ。`[^…]+@[^…]+` の正規表現は、`@` の無い長い語で 2 乗の時間がかかった
+ */
 function addresses(text: string): string[] {
-  return (text.match(ADDRESS) ?? []).map((a) => a.toLowerCase());
+  return text
+    .split(SEPARATORS)
+    .filter((t) => t.includes("@"))
+    .map((a) => a.toLowerCase());
 }
 
 type Headers = { messageId: string | null; inReplyTo: string | null; refs: string[]; fromAddr: string };

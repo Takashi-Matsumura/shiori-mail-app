@@ -19,16 +19,47 @@ export type ParsedMail = {
   senderAuth: SenderAuth;
 };
 
+// 宛先の表示文字列の上限。巨大な To/Cc を持つメールで、スレッドの参加者判定や表示に時間を使わせないため
+const ADDRESS_TEXT_LIMIT = 20_000;
+// テキストに直す HTML の上限。これより長い本文は、先頭だけを使う(検索・一覧・AI の材料には足りる)
+const HTML_TO_TEXT_LIMIT = 500_000;
+
 function addressText(a: AddressObject | AddressObject[] | undefined): string {
   if (!a) return "";
-  return (Array.isArray(a) ? a : [a]).map((x) => x.text).join(", ");
+  return (Array.isArray(a) ? a : [a])
+    .map((x) => x.text)
+    .join(", ")
+    .slice(0, ADDRESS_TEXT_LIMIT);
 }
 
+/** <style>…</style> と <script>…</script> を中身ごと取り除く。閉じタグが無ければ末尾まで。indexOf だけで進むので、入力の長さに比例する時間で済む */
+function stripBlocks(html: string, tag: string): string {
+  const lower = html.toLowerCase();
+  const open = `<${tag}`;
+  const close = `</${tag}`;
+  let out = "";
+  let pos = 0;
+  for (;;) {
+    const start = lower.indexOf(open, pos);
+    if (start < 0) break;
+    out += html.slice(pos, start);
+    const end = lower.indexOf(close, start + open.length);
+    if (end < 0) return out;
+    const gt = lower.indexOf(">", end);
+    pos = gt < 0 ? lower.length : gt + 1;
+  }
+  return out + html.slice(pos);
+}
+
+/**
+ * HTML からテキストを作る。メールの送り手が自由に書ける入力なので、どの正規表現も「長さに比例する時間」で終わるものにしている。
+ * 以前の `<[^>]+>` は、閉じない `<` が並ぶと長さの 2 乗の時間がかかり、1 通の取り込みでサーバが止まった。
+ */
 function htmlToText(html: string): string {
-  return html
-    .replace(/<(style|script)[\s\S]*?<\/\1>/gi, "")
+  return stripBlocks(stripBlocks(html.slice(0, HTML_TO_TEXT_LIMIT), "style"), "script")
     .replace(/<br\s*\/?>|<\/(p|div|h\d|li|tr)>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
+    // タグは `<` の次の `<` より手前で必ず止める([^<>])。これで `<` ごとの走査が重ならない
+    .replace(/<[^<>]*>/g, "")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
