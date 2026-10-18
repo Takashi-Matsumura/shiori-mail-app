@@ -31,15 +31,12 @@ async function Login({ searchParams }: Pick<PageProps<"/login">, "searchParams">
   const nextPath = safeNext(next);
   if (typeof invite === "string" && isValidInvite(invite)) return <LoginForm mode="register" invite={invite} next={nextPath} />;
   if (hasPasskeys(site.rpId)) return <LoginForm mode="login" next={nextPath} />;
-  // 公開ホストでの最初の 1 つは、招待でしか登録できない
-  if (site.rpId !== "localhost" || hasPasskeys()) {
-    return (
-      <p className="text-center text-muted">
-        この入口で使うパスキーがまだありません。Mac で <code>npm run auth:invite</code> を実行し、表示されたリンクから登録してください。
-      </p>
-    );
-  }
-  return <LoginForm mode="register" next={nextPath} />;
+  // 最初の 1 つ(この入口で初めての 1 つ)も、招待でしか登録できない
+  return (
+    <p className="text-center text-muted">
+      この入口で使うパスキーがまだありません。Mac で <code>npm run auth:invite</code> を実行し、表示されたリンクから登録してください。
+    </p>
+  );
 }
 
 /**
