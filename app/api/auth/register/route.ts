@@ -1,8 +1,7 @@
 import type { RegistrationResponseJSON } from "@simplewebauthn/server";
-import { cookies } from "next/headers";
 import { passkeySite } from "@/lib/auth/http";
 import { isValidInvite, registrationOptions, verifyRegistration } from "@/lib/auth/passkey";
-import { SESSION_COOKIE, createSession, isAuthenticated, sessionCookieOptions } from "@/lib/auth/session";
+import { isAuthenticated, setSessionCookie } from "@/lib/auth/session";
 
 /**
  * パスキーの登録。登録できるのは次のどちらかのとき:
@@ -32,6 +31,6 @@ export async function POST(request: Request) {
   });
   if (!ok) return Response.json({ ok: false, message: "パスキーを登録できませんでした。もう一度お試しください。" }, { status: 400 });
   // ログインしていなかった登録(招待)は、そのままログインした扱いにする
-  if (!authenticated) (await cookies()).set(SESSION_COOKIE, createSession(), sessionCookieOptions(site.secure));
+  if (!authenticated) await setSessionCookie(site);
   return Response.json({ ok: true });
 }

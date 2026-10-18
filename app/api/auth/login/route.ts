@@ -1,8 +1,7 @@
 import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
-import { cookies } from "next/headers";
 import { passkeySite } from "@/lib/auth/http";
 import { authenticationOptions, hasPasskeys, verifyAuthentication } from "@/lib/auth/passkey";
-import { SESSION_COOKIE, createSession, sessionCookieOptions } from "@/lib/auth/session";
+import { setSessionCookie } from "@/lib/auth/session";
 
 /** body: { step: "options" } → 認証用のオプション / { step: "verify", response } → 検証してセッションを発行 */
 export async function POST(request: Request) {
@@ -19,6 +18,6 @@ export async function POST(request: Request) {
     return false;
   });
   if (!ok) return Response.json({ ok: false, message: "本人確認できませんでした。もう一度お試しください。" }, { status: 401 });
-  (await cookies()).set(SESSION_COOKIE, createSession(), sessionCookieOptions(site.secure));
+  await setSessionCookie(site);
   return Response.json({ ok: true });
 }
