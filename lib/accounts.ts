@@ -71,10 +71,25 @@ export function getRealAccountFields(): RealAccountFields {
 }
 
 /** パスワードはキーチェーンを優先し、無ければ .env.local の REAL_MAIL_PASSWORD を使う。 */
+/**
+ * 設定画面で「パスワードを忘れる」を選んだ印。立っている間は .env の REAL_MAIL_PASSWORD にも戻らない。
+ * これが無いと、キーチェーンを消しても .env の値が使われ続け、「忘れる」と同時に接続先を変えると、そのパスワードが新しいホストへ送られる
+ */
+export const REAL_PASSWORD_FORGOTTEN_KEY = "real_password_forgotten";
+
 export function getRealPassword(): string | null {
   // デモ用のデータで動かしているときは、本物のパスワード(キーチェーン)を読まない
   if (DEMO) return "demo";
-  return readPassword() ?? (process.env.REAL_MAIL_PASSWORD || null);
+  const stored = readPassword();
+  if (stored) return stored;
+  if (getSetting(REAL_PASSWORD_FORGOTTEN_KEY) === "1") return null;
+  return process.env.REAL_MAIL_PASSWORD || null;
+}
+
+/** 設定画面に出す、パスワードのありか(値そのものは画面へ渡さない)。getRealPassword と同じ判断 */
+export function realPasswordSource(): "keychain" | "env" | "none" {
+  if (readPassword()) return "keychain";
+  return getSetting(REAL_PASSWORD_FORGOTTEN_KEY) !== "1" && process.env.REAL_MAIL_PASSWORD ? "env" : "none";
 }
 
 /** アカウントを組み立てる。必須項目が欠けていれば null。 */
