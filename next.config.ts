@@ -1,8 +1,32 @@
 import type { NextConfig } from "next";
 
+// すべての応答に付けるセキュリティヘッダ。
+// 枠への埋め込みは同じオリジンだけ許す(添付の PDF を iframe で開くため 'none' にはしない)。
+// HSTS は HTTPS で届いたときだけブラウザが受け取る(http://localhost では無視される)。
+// 同じドメインの他のサイトに効かないよう includeSubDomains は付けない
+const FRAME_AND_HSTS = [
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "Strict-Transport-Security", value: "max-age=15552000" },
+];
+const SECURITY_HEADERS = [
+  ...FRAME_AND_HSTS,
+  { key: "Content-Security-Policy", value: "frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "same-origin" },
+];
+
 const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
+  poweredByHeader: false,
+  async headers() {
+    return [
+      // ここのヘッダは、ルートが自分で付けた同じ名前のヘッダを上書きする。
+      // 添付は sandbox 付きの CSP などを自分で付けているので、それと重ならないものだけにする
+      { source: "/:path((?!api/attachments/).*)", headers: SECURITY_HEADERS },
+      { source: "/api/attachments/:path*", headers: FRAME_AND_HSTS },
+    ];
+  },
   // トップは受信トレイへ。ページ内の redirect() だと Cache Components の事前検証がエラーになるため、設定側で転送する
   async redirects() {
     return [{ source: "/", destination: "/mail/inbox", permanent: false }];
