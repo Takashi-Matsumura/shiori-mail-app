@@ -4,6 +4,7 @@ import type { Account } from "@/lib/accounts";
 import { getDb, getSetting, setSetting } from "@/lib/db";
 import { DEMO, DEMO_MESSAGE } from "@/lib/demo";
 import { parseRaw } from "@/lib/mail/parse";
+import { threadKeyFor } from "@/lib/mail/thread";
 
 export type MailboxSlug = "inbox" | "sent";
 export const MAILBOXES: { slug: MailboxSlug; label: string }[] = [
@@ -155,9 +156,10 @@ async function fetchAndStore(client: ImapFlow, account: Account, slug: MailboxSl
   for (const m of fetched) {
     const raw = m.source as Buffer;
     const p = await parseRaw(raw);
-    const internal = m.internalDate ? new Date(m.internalDate) : new Date();
-    // スレッドの根は References の先頭。無ければ In-Reply-To、それも無ければ自分自身。
-    const threadKey = p.refs[0] ?? p.inReplyTo ?? p.messageId;
+    // 日付はサーバが受け取った時刻(INTERNALDATE)。ヘッダの Date は送り手が自由に書けるので、
+    // 過去の日付にして返信済み・完了の扱いを引き継がせる(lib/queries.ts の REPLIED_SQL・DONE_SQL)ことができてしまう
+    const received = m.internalDate ? new Date(m.internalDate) : (p.date ?? new Date());
+    const threadKey = threadKeyFor(db, account.id, slug, p);
     insert.run(
       account.id,
       slug,
@@ -171,7 +173,7 @@ async function fetchAndStore(client: ImapFlow, account: Account, slug: MailboxSl
       p.fromAddr,
       p.toText,
       p.ccText,
-      (p.date ?? internal).getTime(),
+      received.getTime(),
       m.flags?.has("\\Seen") ? 1 : 0,
       p.text,
       p.html,
