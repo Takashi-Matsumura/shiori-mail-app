@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AutoRunner } from "@/components/auto-runner";
-import { DraftIcon, InboxIcon, PlusIcon, SearchIcon, SentIcon, SettingsIcon, TasksIcon } from "@/components/icons";
+import { BookmarkIcon, DraftIcon, InboxIcon, PlusIcon, SearchIcon, SentIcon, SettingsIcon, TasksIcon } from "@/components/icons";
 import { NavLink } from "@/components/nav-link";
 import { SyncButton } from "@/components/sync-button";
 import { getAccount } from "@/lib/accounts";
@@ -54,6 +54,7 @@ export async function Sidebar() {
         <p className="mt-3 px-2 text-xs text-muted">栞</p>
         <NavLink href="/search" icon={<SearchIcon />}>検索</NavLink>
         <NavLink href="/tasks" icon={<TasksIcon />}>予定・やること</NavLink>
+        <NavLink href="/bookmarks" icon={<BookmarkIcon />}>読みかけ</NavLink>
         <span className="mt-3" />
         <NavLink href="/settings" icon={<SettingsIcon />}>設定</NavLink>
       </nav>

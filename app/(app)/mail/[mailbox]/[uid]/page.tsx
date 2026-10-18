@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AssistButton } from "@/components/assist-button";
 import { aquaClass } from "@/components/aqua-button";
+import { BookmarkBand } from "@/components/bookmark-band";
+import { BookmarkButton } from "@/components/bookmark-button";
 import { DoneButton } from "@/components/done-button";
 import { TrashOneButton } from "@/components/trash-one-button";
 import { ChevronLeftIcon, ReplyIcon, SparkleIcon } from "@/components/icons";
@@ -17,7 +19,7 @@ import { linkSignature } from "@/lib/mail/link-sig";
 import { SENDER_AUTH_WARNING } from "@/lib/mail/sender-auth";
 import { parseRaw } from "@/lib/mail/parse";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
-import { getAiResults, getHandled, getMessage, getThread, type AiResultRow } from "@/lib/queries";
+import { getAiResults, getBookmark, getHandled, getMessage, getThread, listBookmarkAfter, type AiResultRow } from "@/lib/queries";
 
 export default function MessagePage({ params }: PageProps<"/mail/[mailbox]/[uid]">) {
   return (
@@ -47,12 +49,15 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
   const message = await getMessage(account.id, box.slug, Number(uid));
   if (!message) notFound();
 
-  const [thread, ai, parsed, handled] = await Promise.all([
+  const [thread, ai, parsed, handled, bookmark, after] = await Promise.all([
     getThread(account.id, message.thread_key),
     getAiResults(message.id),
     parseRaw(Buffer.from(message.raw)),
     getHandled(message.id),
+    getBookmark(message.id),
+    listBookmarkAfter(message.id),
   ]);
+  const recap = parseResult<{ text: string; upto: number }>(ai.bookmark_recap);
 
   const closure = parseResult<Closure>(ai.closure);
   const spam = parseResult<Classification>(ai.classify)?.category === "迷惑";
@@ -72,7 +77,7 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
           <h1 className="min-w-0 text-xl font-semibold break-words sm:pt-2">{message.subject || "(件名なし)"}</h1>
           <MarkSeen key={message.id} mailbox={box.slug} uid={message.uid} seen={message.seen === 1} />
           <div className="flex shrink-0 items-start gap-3 self-end sm:gap-4 sm:self-auto">
-            {/* 整理: 栞に聞く・捨てる・済ませる */}
+            {/* 整理: 栞に聞く・挟む・捨てる・済ませる */}
             <AssistButton
               key={`ai-${message.id}`}
               messageId={message.id}
@@ -83,6 +88,7 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
               classificationLabeled={ai.classify?.model === USER_LABEL_MODEL}
               extraction={ai.extract ? { items: parseResult<{ items: ExtractedItem[] }>(ai.extract)?.items ?? [], meta: meta(ai.extract)! } : null}
             />
+            <BookmarkButton key={`bookmark-${message.id}`} messageId={message.id} bookmarked={bookmark !== null} />
             {box.slug === "inbox" ? (
               <>
                 <TrashOneButton key={`trash-${message.id}`} uid={message.uid} />
@@ -106,6 +112,17 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
             <MoreActions key={`more-${message.id}`} messageId={message.id} />
           </div>
         </div>
+        {bookmark ? (
+          <BookmarkBand
+            key={`band-${message.id}`}
+            messageId={message.id}
+            note={bookmark.note}
+            noteBy={bookmark.noteBy}
+            created={bookmark.created}
+            after={after.map((t) => ({ id: t.id, href: `/mail/${t.mailbox}/${t.uid}`, from: t.from, date: t.date, sent: t.sent }))}
+            recap={recap && typeof recap.text === "string" ? { text: recap.text, upto: recap.upto, meta: meta(ai.bookmark_recap)! } : null}
+          />
+        ) : null}
         {/* まだ対応していないメールには、やり取りが終わっていそうかの栞の判断を添える(完了にするかは利用者が決める) */}
         {box.slug === "inbox" && !handled.done && !handled.replied && closure ? (
           <p

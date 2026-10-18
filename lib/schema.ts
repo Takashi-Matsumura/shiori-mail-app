@@ -153,6 +153,17 @@ CREATE TABLE IF NOT EXISTS message_done (
   created INTEGER NOT NULL
 );
 
+-- あなたが「挟んだ」メール(読みかけ)。note は戻ってきたときのためのメモで、note_by は ai(栞が書いた)/ user(あなたが書き直した)。
+-- last_id は挟んだ時点の messages.id の最大。同じスレッドでこれより後に取り込んだメールを「その後」とみなす
+CREATE TABLE IF NOT EXISTS bookmarks (
+  message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+  note TEXT NOT NULL DEFAULT '',
+  note_by TEXT NOT NULL DEFAULT 'ai',
+  last_id INTEGER NOT NULL,
+  created INTEGER NOT NULL,
+  updated INTEGER NOT NULL
+);
+
 -- 作成画面の書きかけ。kind は new / reply-<id> / forward-<id>。ログインの内側(サーバ)に置き、ロック中は読めないようにする
 CREATE TABLE IF NOT EXISTS compose_drafts (
   kind TEXT PRIMARY KEY,

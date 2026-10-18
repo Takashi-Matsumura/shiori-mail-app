@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { BatchButton } from "@/components/batch-button";
 import { CategoryBadge } from "@/components/category-badge";
-import { CheckIcon, PaperclipIcon, PriorityIcon, SparkleIcon } from "@/components/icons";
+import { BookmarkIcon, CheckIcon, PaperclipIcon, PriorityIcon, SparkleIcon } from "@/components/icons";
 import { ImportOlder } from "@/components/import-older";
 import { Switch } from "@/components/switch";
 import { TrashShown } from "@/components/trash-shown";
@@ -26,6 +26,8 @@ type Item = {
   priority: string | null;
   /** 返信済みか完了にしたもの */
   handled: "replied" | "done" | null;
+  /** 挟んだ(読みかけ) */
+  bookmarked: boolean;
   /** 栞が「やり取りは終わっていそう」と判断した理由(未対応のメールだけ) */
   closedHint: string | null;
 };
@@ -141,6 +143,12 @@ export function MessageList({ mailbox, title, items, pendingClassify, olderRemai
                     <span className="shrink-0 text-muted [&_svg]:size-3.5" title="添付あり">
                       <PaperclipIcon />
                       <span className="sr-only">添付あり</span>
+                    </span>
+                  ) : null}
+                  {m.bookmarked ? (
+                    <span className="shrink-0 text-accent [&_svg]:size-3.5" title="読みかけ(挟んだメール)">
+                      <BookmarkIcon />
+                      <span className="sr-only">読みかけ</span>
                     </span>
                   ) : null}
                   {m.handled ? (

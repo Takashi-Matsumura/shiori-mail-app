@@ -166,3 +166,10 @@ export const TrashIcon = () => (
     <path d="M10 11v5M14 11v5" />
   </Icon>
 );
+
+/** 挟む(読みかけ): 本の栞(リボン) */
+export const BookmarkIcon = () => (
+  <Icon>
+    <path d="M18 21 12 17l-6 4V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z" />
+  </Icon>
+);

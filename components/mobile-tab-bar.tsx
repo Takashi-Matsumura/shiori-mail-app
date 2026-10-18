@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { aquaClass } from "@/components/aqua-button";
-import { CloseIcon, DraftIcon, InboxIcon, MoreIcon, PlusIcon, SearchIcon, SentIcon, SettingsIcon, TasksIcon } from "@/components/icons";
+import { BookmarkIcon, CloseIcon, DraftIcon, InboxIcon, MoreIcon, PlusIcon, SearchIcon, SentIcon, SettingsIcon, TasksIcon } from "@/components/icons";
 
 const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
 
 // 「メニュー」にしまう行き先。どれかを開いている間は「メニュー」のタブを選択中として描く
 const MORE_LINKS = [
+  { href: "/bookmarks", label: "読みかけ", icon: <BookmarkIcon /> },
   { href: "/mail/sent", label: "送信済み", icon: <SentIcon /> },
   { href: "/drafts", label: "下書き", icon: <DraftIcon /> },
   { href: "/settings", label: "設定", icon: <SettingsIcon /> },

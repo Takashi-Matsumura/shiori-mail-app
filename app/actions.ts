@@ -16,7 +16,7 @@ import { getAiConfig } from "@/lib/ai/config";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { isNewExternalUrl } from "@/lib/ai/loopback";
 import { saveAiResult } from "@/lib/ai/ops";
-import { CATEGORIES, PRIORITIES } from "@/lib/ai/prompts";
+import { BOOKMARK_NOTE_MAX, CATEGORIES, PRIORITIES } from "@/lib/ai/prompts";
 import { requireSession } from "@/lib/auth/session";
 import { getDb, setSetting } from "@/lib/db";
 import { deleteDraft, saveDraft } from "@/lib/drafts";
@@ -457,6 +457,50 @@ export async function setDoneAction(messageId: number, done: boolean): Promise<A
     };
   }
   return { ok: true, message: done ? "完了にしました" : "完了を外しました" };
+}
+
+/**
+ * メールを「挟む」(読みかけにする)/外す。アプリの中だけで記録する。
+ * メモは空のまま作り、栞が書く(/api/ai/bookmark)。挟んだ時点の最大の id を覚えて、その後に届いたメールを見分ける。
+ */
+export async function setBookmarkAction(messageId: number, on: boolean): Promise<ActionState> {
+  await requireSession();
+  if (!Number.isInteger(messageId)) return { ok: false, message: "不正な指定です" };
+  const account = getAccount();
+  if (!account) return { ok: false, message: NO_ACCOUNT };
+  const db = getDb();
+  // ほかのアカウントのメールは触らない
+  if (!db.prepare("SELECT 1 FROM messages WHERE id = ? AND account = ?").get(messageId, account.id)) {
+    return { ok: false, message: "メールが見つかりません。" };
+  }
+  if (on) {
+    const now = Date.now();
+    const { last } = db.prepare("SELECT MAX(id) AS last FROM messages").get() as { last: number };
+    db.prepare("INSERT OR IGNORE INTO bookmarks (message_id, last_id, created, updated) VALUES (?, ?, ?, ?)").run(messageId, last, now, now);
+  } else {
+    db.prepare("DELETE FROM bookmarks WHERE message_id = ?").run(messageId);
+    db.prepare("DELETE FROM ai_results WHERE message_id = ? AND kind = 'bookmark_recap'").run(messageId);
+  }
+  refresh();
+  return { ok: true, message: on ? "挟みました" : "外しました" };
+}
+
+/** 挟んだメールのメモを、あなたが書き直す。以後は栞に上書きさせない */
+export async function saveBookmarkNoteAction(messageId: number, note: string): Promise<ActionState> {
+  await requireSession();
+  if (!Number.isInteger(messageId) || typeof note !== "string") return { ok: false, message: "不正な指定です" };
+  const account = getAccount();
+  if (!account) return { ok: false, message: NO_ACCOUNT };
+  const text = note.replace(/\s+/g, " ").trim().slice(0, BOOKMARK_NOTE_MAX);
+  const result = getDb()
+    .prepare(
+      `UPDATE bookmarks SET note = ?, note_by = 'user', updated = ?
+       WHERE message_id = ? AND message_id IN (SELECT id FROM messages WHERE account = ?)`,
+    )
+    .run(text, Date.now(), messageId, account.id);
+  if (result.changes === 0) return { ok: false, message: "挟んだメールが見つかりません。" };
+  refresh();
+  return { ok: true, message: "メモを保存しました" };
 }
 
 /** 一度にゴミ箱へ移せる通数。押し間違いで受信トレイが丸ごと消えないよう、上限を置く */
