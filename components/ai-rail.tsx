@@ -1,5 +1,6 @@
 import { getAccount } from "@/lib/accounts";
-import { getAiConfig, isLoopbackUrl } from "@/lib/ai/config";
+import { getAiConfig } from "@/lib/ai/config";
+import { isLoopbackUrl } from "@/lib/ai/loopback";
 import { ITEM_TYPES } from "@/lib/ai/prompts";
 import { getAiStats } from "@/lib/queries";
 

@@ -30,14 +30,3 @@ export function getAiConfig(): AiConfig {
     classifyKnn: getSetting("ai_classify_knn") !== "off",
   };
 }
-
-/** 接続先がこのマシン自身かどうか。そうでなければメール本文がマシンの外へ出る。 */
-export function isLoopbackUrl(url: string): boolean {
-  try {
-    const host = new URL(url).hostname.replace(/^\[|\]$/g, "");
-    // 127. で始まるだけの名前(127.example.com など)を通さないよう、IPv4 の形まで確かめる
-    return host === "localhost" || host === "::1" || /^127(\.\d{1,3}){3}$/.test(host);
-  } catch {
-    return false;
-  }
-}

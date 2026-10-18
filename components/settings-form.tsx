@@ -4,6 +4,7 @@ import { startTransition, useActionState, useEffect, useId, useRef, useState } f
 import { saveSettingsAction, testRealAccountAction, type ActionState } from "@/app/actions";
 import { DisclosureButton } from "@/components/disclosure-button";
 import { InfoButton } from "@/components/info-button";
+import { isLoopbackUrl, isNewExternalUrl } from "@/lib/ai/loopback";
 import { HELP } from "@/lib/help-texts";
 
 type AccountInfo = { email: string; servers: string };
@@ -42,15 +43,6 @@ const inputClass = "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 
 /** 入力中の URL が保存済みの URL と同じか(保存するときに末尾の / は落とされる) */
 const isSaved = (input: string, saved: string) => input.trim().replace(/\/+$/, "") === saved;
 
-function isLoopback(url: string): boolean {
-  try {
-    const host = new URL(url).hostname.replace(/^\[|\]$/g, "");
-    return host === "localhost" || host === "::1" || /^127\./.test(host);
-  } catch {
-    return true;
-  }
-}
-
 export function SettingsForm({
   account,
   realFields: rf,
@@ -85,7 +77,10 @@ export function SettingsForm({
   }, null);
   const [baseUrl, setBaseUrl] = useState(ai.baseUrl);
   const [embedBaseUrl, setEmbedBaseUrl] = useState(ai.embedBaseUrl);
-  const external = [baseUrl, embedBaseUrl].some((u) => u.trim() !== "" && !isLoopback(u));
+  // 入力途中の不完全な URL では警告を出さない
+  const external = [baseUrl, embedBaseUrl].some((u) => URL.canParse(u.trim()) && !isLoopbackUrl(u.trim()));
+  // いま使っている URL から外へ新しく切り替えるときだけ、同意を求める(サーバも同じ条件で確かめる)
+  const needsConsent = isNewExternalUrl(baseUrl, ai.baseUrl) || isNewExternalUrl(embedBaseUrl, ai.embedBaseUrl);
   const [test, runTest, testing] = useActionState<ActionState, FormData>((_prev, formData) => testRealAccountAction(formData), null);
   const formRef = useRef<HTMLFormElement>(null);
   // 文字の入力は、1 文字ごとではなく欄を離れたときに保存する(書きかけのホスト名などを保存しないため)
@@ -290,9 +285,17 @@ export function SettingsForm({
 
         {/* メール本文が外へ出る警告なので、畳んでいても見せる */}
         {external ? (
-          <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-2 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100">
-            このマシンの外の URL が含まれています。要約や検索のたびに、メールの本文がその宛先へ送信されます。
-          </p>
+          <div role="alert" className="flex flex-col gap-2 rounded-md border border-red-300 bg-red-50 p-2 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100">
+            <p>
+              このマシンの外の URL が含まれています。要約や検索のたびに、また自動処理では新着のたびに、メールの本文がその宛先へ送信されます。
+            </p>
+            {needsConsent ? (
+              <label className="flex items-start gap-2 font-medium">
+                <input type="checkbox" name="aiExternalConsent" value="on" className="mt-1" />
+                <span>メールの本文がこの宛先へ送られることに同意する</span>
+              </label>
+            ) : null}
+          </div>
         ) : null}
 
         {/* 畳んでも入力欄は残す(取り除くと、保存したときに AI の設定が空で上書きされる) */}
