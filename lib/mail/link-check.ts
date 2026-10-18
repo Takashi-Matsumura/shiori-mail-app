@@ -1,13 +1,9 @@
 // メールの中のリンクを開く前の確認(app/link/page.tsx)で使う、フィッシングの手がかり。
 // ここでの判定は手がかりにすぎない。見つからなかったからといって安全とは限らない。
 
-export type LinkWarning = { level: "危険" | "注意" | "参考"; message: string };
+import { getDomain } from "tldts";
 
-/** 末尾 3 ラベルで 1 つの組織を表すドメイン(co.jp など)。全部は網羅しない、よく見るものだけ */
-const SECOND_LEVEL = new Set([
-  "co.jp", "ne.jp", "or.jp", "ac.jp", "go.jp", "gr.jp", "ed.jp", "lg.jp", "ad.jp",
-  "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz", "com.cn", "com.tw", "co.kr", "com.br",
-]);
+export type LinkWarning = { level: "危険" | "注意" | "参考"; message: string };
 
 /** 本当の行き先を隠してしまう短縮 URL */
 const SHORTENERS = new Set([
@@ -16,13 +12,16 @@ const SHORTENERS = new Set([
 
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
 
-/** ホスト名から、組織を表す部分(登録ドメイン)を取り出す。例: www.mail.example.co.jp → example.co.jp */
+/**
+ * ホスト名から、組織を表す部分(登録ドメイン)を取り出す。例: www.mail.example.co.jp → example.co.jp
+ * 区切りは Public Suffix List(tldts)で決める。github.io や herokuapp.com のように誰でも下にサイトを作れるドメイン
+ * (PSL の private の部分)も区切りとして扱うので、a.github.io と b.github.io は別の持ち主として比べる。
+ */
 export function registrableDomain(host: string): string {
   const h = host.toLowerCase().replace(/\.$/, "");
   if (IPV4.test(h) || h.startsWith("[")) return h;
-  const labels = h.split(".");
-  const take = labels.length >= 3 && SECOND_LEVEL.has(labels.slice(-2).join(".")) ? 3 : 2;
-  return labels.slice(-take).join(".");
+  // PSL で決まらない名前(サフィックスそのもの、社内の名前など)は、ホスト名のまま比べる
+  return getDomain(h, { allowPrivateDomains: true }) ?? h;
 }
 
 /** リンクの文字が URL やドメインの形なら、そのホスト名を返す(「こちら」などの文字なら null) */
