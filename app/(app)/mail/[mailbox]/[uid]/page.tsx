@@ -13,6 +13,7 @@ import { requireAccount } from "@/lib/accounts";
 import type { Classification, Closure, ExtractedItem } from "@/lib/ai/prompts";
 import { bytes, fullDate } from "@/lib/format";
 import { MAILBOXES } from "@/lib/mail/imap";
+import { linkSignature } from "@/lib/mail/link-sig";
 import { parseRaw } from "@/lib/mail/parse";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { getAiResults, getHandled, getMessage, getThread, type AiResultRow } from "@/lib/queries";
@@ -53,6 +54,7 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
   ]);
 
   const closure = parseResult<Closure>(ai.closure);
+  const spam = parseResult<Classification>(ai.classify)?.category === "迷惑";
   return (
     <article className="mx-auto flex max-w-4xl flex-col gap-4 p-4 sm:p-6">
       <header className="flex flex-col gap-3">
@@ -139,7 +141,8 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
         key={`body-${message.id}`}
         messageId={message.id}
         senderAddr={message.from_addr}
-        spam={parseResult<Classification>(ai.classify)?.category === "迷惑"}
+        spam={spam}
+        linkSig={linkSignature(message.from_addr, spam)}
         text={message.text}
         html={message.html}
         size={bytes(message.size)}

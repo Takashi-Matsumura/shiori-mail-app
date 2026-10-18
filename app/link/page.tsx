@@ -4,11 +4,13 @@ import { LinkCloseButton } from "@/components/link-close-button";
 import { ShioriLogo } from "@/components/shiori-logo";
 import { HELP } from "@/lib/help-texts";
 import { checkLink, parseLink, registrableDomain, type LinkWarning } from "@/lib/mail/link-check";
+import { isValidLinkSignature } from "@/lib/mail/link-sig";
 
 /**
  * メールの中のリンクを開く前の確認ページ。本当の行き先とフィッシングの手がかりを見せ、「このサイトを開く」を押して初めて外へ移る。
  * メールの HTML は sandbox 付きの iframe で開いているので、そこから開いたタブにはログインの Cookie(SameSite=Strict)が付かない。
  * そのためこのページはログインなしで開けるようにし、メールのデータは読まない(行き先・表示の文字・差出人・迷惑かどうかは URL で受け取る)。
+ * 差出人と迷惑かどうかには、メールの画面がサーバの署名(k)を付けている。誰でもこのページへのリンクを作れるので、署名の合うものだけを信じる。
  */
 export default function LinkPage({ searchParams }: PageProps<"/link">) {
   return (
@@ -46,7 +48,22 @@ async function LinkCheck({ searchParams }: Pick<PageProps<"/link">, "searchParam
   const host = url.hostname;
   const domain = registrableDomain(host);
   const sub = host.endsWith(domain) ? host.slice(0, host.length - domain.length) : "";
-  const warnings = checkLink({ url, text, sender: one(params.s).slice(0, 320), spam: one(params.spam) === "1" });
+  // 差出人と迷惑の判定は、アプリが署名したものだけ信じる。署名が合わないリンクはメールの画面以外で作られたもの
+  // (第三者が警告の出ない確認ページを装っている可能性がある)なので、差出人を使わずに強く警告する
+  const sender = one(params.s).slice(0, 320);
+  const spam = one(params.spam) === "1";
+  const signed = isValidLinkSignature(sender, spam, one(params.k));
+  const warnings = [
+    ...(signed
+      ? []
+      : [
+          {
+            level: "危険",
+            message: "このリンクは、Shiori Mail がメールの画面で作ったものではありません。差出人や迷惑の判定を確かめられないので、心当たりがなければ開かないでください。",
+          } as const,
+        ]),
+    ...checkLink({ url, text, sender: signed ? sender : "", spam: signed && spam }),
+  ];
   const danger = warnings.some((w) => w.level === "危険");
 
   return (
