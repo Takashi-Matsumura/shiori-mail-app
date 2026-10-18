@@ -2,7 +2,16 @@
 
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
-import { FORWARD_INTRO_KEY, REAL_SETTING_KEYS, SIGNATURE_KEY, buildRealAccount, getAccount, getRealAccountFields, getRealPassword } from "@/lib/accounts";
+import {
+  FORWARD_INTRO_KEY,
+  REAL_PASSWORD_FORGOTTEN_KEY,
+  REAL_SETTING_KEYS,
+  SIGNATURE_KEY,
+  buildRealAccount,
+  getAccount,
+  getRealAccountFields,
+  getRealPassword,
+} from "@/lib/accounts";
 import { getAiConfig } from "@/lib/ai/config";
 import { USER_LABEL_MODEL } from "@/lib/ai/knn";
 import { isNewExternalUrl } from "@/lib/ai/loopback";
@@ -230,8 +239,11 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
     } catch {
       return { ok: false, message: "キーチェーンにパスワードを保存できませんでした。" };
     }
+    setSetting(REAL_PASSWORD_FORGOTTEN_KEY, "");
   } else if (real.forgetPassword) {
+    // キーチェーンを消すだけでなく、.env のパスワードにも戻らないようにする(新しい接続先へ古いパスワードが送られないように)
     deletePassword();
+    setSetting(REAL_PASSWORD_FORGOTTEN_KEY, "1");
   }
   // 読み取り専用を外したら、アプリの中だけで付けていた既読・未読は捨て、次の同期でサーバの状態に戻す
   if (getRealAccountFields().readOnly && !real.fields.readOnly) {

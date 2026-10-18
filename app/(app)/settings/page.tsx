@@ -2,8 +2,8 @@ import { Suspense } from "react";
 import { PalettePicker } from "@/components/palette-picker";
 import { SettingsForm } from "@/components/settings-form";
 import { PushSettings } from "@/components/push-settings";
-import { getAccount, getForwardIntro, getRealAccountFields, getSignature, type Account } from "@/lib/accounts";
-import { keychainAvailable, readPassword } from "@/lib/keychain";
+import { getAccount, getForwardIntro, getRealAccountFields, getSignature, realPasswordSource, type Account } from "@/lib/accounts";
+import { keychainAvailable } from "@/lib/keychain";
 import { AiError, probeServer } from "@/lib/ai/client";
 import { DEFAULT_AI_BASE_URL, getAiConfig } from "@/lib/ai/config";
 import { vapidPublicKey } from "@/lib/push";
@@ -28,7 +28,7 @@ async function Settings() {
   await io();
   const account = getAccount();
   // パスワードそのものは画面へ渡さず、どこにあるかだけを伝える
-  const passwordSource = readPassword() ? "keychain" : process.env.REAL_MAIL_PASSWORD ? "env" : "none";
+  const passwordSource = realPasswordSource();
   const cfg = getAiConfig();
   const separateEmbed = cfg.embedBaseUrl !== cfg.baseUrl;
   const load = (url: string) =>
