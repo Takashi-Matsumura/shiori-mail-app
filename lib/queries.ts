@@ -51,6 +51,8 @@ export type ListItem = {
   replied: number;
   /** このメールか、同じスレッドでこれより後のメールを「完了」にした */
   done: number;
+  /** このメールを挟んだ(読みかけ) */
+  bookmarked: number;
 };
 
 export type AiResultRow = {
@@ -98,7 +100,8 @@ export async function listMessages(account: string, mailbox: MailboxSlug): Promi
               (SELECT result FROM ai_results a WHERE a.message_id = m.id AND a.kind = 'classify') AS classification,
               (SELECT result FROM ai_results a WHERE a.message_id = m.id AND a.kind = 'closure') AS closure,
               ${REPLIED_SQL} AS replied,
-              ${DONE_SQL} AS done
+              ${DONE_SQL} AS done,
+              EXISTS (SELECT 1 FROM bookmarks b WHERE b.message_id = m.id) AS bookmarked
        FROM messages m WHERE m.account = ? AND m.mailbox = ? ORDER BY m.date DESC`,
     )
     .all(account, mailbox) as (Omit<ListItem, "classification" | "closure"> & { classification: string | null; closure: string | null })[];
@@ -213,6 +216,113 @@ export async function getHandled(messageId: number): Promise<{ replied: boolean;
     .prepare(`SELECT ${REPLIED_SQL} AS replied, ${DONE_SQL} AS done FROM messages m WHERE m.id = ?`)
     .get(messageId) as { replied: number; done: number } | undefined;
   return { replied: row?.replied === 1, done: row?.done === 1 };
+}
+
+export type Bookmark = { messageId: number; note: string; noteBy: "ai" | "user"; lastId: number; created: number };
+export type ThreadMail = MessageRow & { sent: boolean };
+
+// 挟んだ後のメール(messages t)。挟んだメール(messages m)と同じスレッドで、挟んだ後に取り込んだもの。
+// 古いメールの取り込みも id は大きくなるので、日時が挟んだメールより後のものに限る
+const AFTER_SQL = `m.thread_key IS NOT NULL AND t.account = m.account AND t.thread_key = m.thread_key
+  AND t.id > b.last_id AND t.date > m.date`;
+
+export async function getBookmark(messageId: number): Promise<Bookmark | null> {
+  await io();
+  const row = getDb()
+    .prepare("SELECT message_id, note, note_by, last_id, created FROM bookmarks WHERE message_id = ?")
+    .get(messageId) as { message_id: number; note: string; note_by: string; last_id: number; created: number } | undefined;
+  if (!row) return null;
+  return { messageId: row.message_id, note: row.note, noteBy: row.note_by === "user" ? "user" : "ai", lastId: row.last_id, created: row.created };
+}
+
+/** 挟んだメールのスレッドを、挟んだときまで(最後が挟んだメール)と、その後に分けて返す(古い順) */
+export function getBookmarkThread(account: string, messageId: number): { message: MessageRow; bookmark: Bookmark; before: ThreadMail[]; after: ThreadMail[] } | null {
+  const db = getDb();
+  const message = db.prepare("SELECT * FROM messages WHERE account = ? AND id = ?").get(account, messageId) as MessageRow | undefined;
+  const row = db.prepare("SELECT message_id, note, note_by, last_id, created FROM bookmarks WHERE message_id = ?").get(messageId) as
+    | { message_id: number; note: string; note_by: string; last_id: number; created: number }
+    | undefined;
+  if (!message || !row) return null;
+  const bookmark: Bookmark = { messageId, note: row.note, noteBy: row.note_by === "user" ? "user" : "ai", lastId: row.last_id, created: row.created };
+  const thread = (
+    message.thread_key ? (db.prepare("SELECT * FROM messages WHERE account = ? AND thread_key = ? ORDER BY date ASC").all(account, message.thread_key) as MessageRow[]) : [message]
+  ).map((t) => ({ ...t, sent: t.mailbox === "sent" }));
+  const isAfter = (t: MessageRow) => t.id > bookmark.lastId && t.date > message.date;
+  return {
+    message,
+    bookmark,
+    before: thread.filter((t) => t.date <= message.date && !isAfter(t)),
+    after: thread.filter(isAfter),
+  };
+}
+
+export type BookmarkAfter = { id: number; uid: number; mailbox: MailboxSlug; from: string; date: number; sent: boolean };
+
+/** 挟んだ後のメール(古い順)。メールを開いたときの帯に出す */
+export async function listBookmarkAfter(messageId: number): Promise<BookmarkAfter[]> {
+  await io();
+  const rows = getDb()
+    .prepare(
+      `SELECT t.id, t.uid, t.mailbox, t.from_name, t.from_addr, t.date
+       FROM bookmarks b JOIN messages m ON m.id = b.message_id JOIN messages t ON ${AFTER_SQL}
+       WHERE b.message_id = ? ORDER BY t.date ASC`,
+    )
+    .all(messageId) as { id: number; uid: number; mailbox: MailboxSlug; from_name: string; from_addr: string; date: number }[];
+  return rows.map((r) => ({ id: r.id, uid: r.uid, mailbox: r.mailbox, from: r.from_name || r.from_addr, date: r.date, sent: r.mailbox === "sent" }));
+}
+
+export type BookmarkItem = {
+  messageId: number;
+  uid: number;
+  mailbox: MailboxSlug;
+  subject: string;
+  from: string;
+  date: number;
+  note: string;
+  created: number;
+  /** 挟んだ後に届いた・送ったメールの数と、いちばん新しい日時 */
+  after: number;
+  lastActivity: number | null;
+};
+
+/** 読みかけの一覧。挟んだ後に動きがあったものを、新しい動きの順に上へ。残りは挟んだ順(新しい順) */
+export async function listBookmarks(account: string): Promise<BookmarkItem[]> {
+  await io();
+  const rows = getDb()
+    .prepare(
+      `SELECT m.id, m.uid, m.mailbox, m.subject, m.from_name, m.from_addr, m.to_text, m.date, b.note, b.created,
+              (SELECT COUNT(*) FROM messages t WHERE ${AFTER_SQL}) AS after,
+              (SELECT MAX(t.date) FROM messages t WHERE ${AFTER_SQL}) AS last_activity
+       FROM bookmarks b JOIN messages m ON m.id = b.message_id
+       WHERE m.account = ?
+       ORDER BY last_activity IS NULL, last_activity DESC, b.created DESC`,
+    )
+    .all(account) as {
+    id: number;
+    uid: number;
+    mailbox: MailboxSlug;
+    subject: string;
+    from_name: string;
+    from_addr: string;
+    to_text: string;
+    date: number;
+    note: string;
+    created: number;
+    after: number;
+    last_activity: number | null;
+  }[];
+  return rows.map((r) => ({
+    messageId: r.id,
+    uid: r.uid,
+    mailbox: r.mailbox,
+    subject: r.subject,
+    from: r.mailbox === "sent" ? `自分 → ${r.to_text}` : r.from_name || r.from_addr,
+    date: r.date,
+    note: r.note,
+    created: r.created,
+    after: r.after,
+    lastActivity: r.last_activity,
+  }));
 }
 
 export async function getCounts(account: string): Promise<{ unread: number; total: number }> {

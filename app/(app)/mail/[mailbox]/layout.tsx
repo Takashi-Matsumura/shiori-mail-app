@@ -49,6 +49,7 @@ async function ListPane({ params }: { params: Promise<{ mailbox: string }> }) {
         category: m.classification?.category ?? null,
         priority: m.classification?.priority ?? null,
         handled: m.done ? "done" : m.replied ? "replied" : null,
+        bookmarked: m.bookmarked === 1,
         // 対応済みになったら、栞の判断はもう出さない
         closedHint: !m.done && !m.replied && m.closure?.status === "終わっていそう" ? m.closure.reason : null,
       }))}

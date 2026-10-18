@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { DraftIcon, InboxIcon, PlusIcon, SearchIcon, SentIcon, SettingsIcon, TasksIcon } from "@/components/icons";
+import { BookmarkIcon, DraftIcon, InboxIcon, PlusIcon, SearchIcon, SentIcon, SettingsIcon, TasksIcon } from "@/components/icons";
 import { RailLink } from "@/components/nav-link";
 import { getAccount } from "@/lib/accounts";
 import { countDrafts } from "@/lib/drafts";
@@ -26,6 +26,7 @@ export async function SidebarRail() {
       <span className="my-1 h-px w-6 bg-line" />
       <RailLink href="/search" label="検索" icon={<SearchIcon />} />
       <RailLink href="/tasks" label="予定・やること" icon={<TasksIcon />} />
+      <RailLink href="/bookmarks" label="読みかけ" icon={<BookmarkIcon />} />
       <span className="my-1 h-px w-6 bg-line" />
       <RailLink href="/settings" label="設定" icon={<SettingsIcon />} />
     </nav>
