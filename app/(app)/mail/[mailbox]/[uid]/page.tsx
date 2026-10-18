@@ -108,7 +108,7 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
     </>
   );
   return (
-    <article className="mx-auto flex max-w-4xl flex-col gap-4 p-4 sm:p-6">
+    <article className="@container mx-auto flex max-w-4xl flex-col gap-4 p-4 sm:p-6">
       <header className="flex flex-col gap-3">
         {/* lg 未満では一覧を隠しているので、戻る道を出す */}
         <Link
@@ -118,11 +118,11 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
           <ChevronLeftIcon />
           {box.label}
         </Link>
-        {/* 狭い画面では、件名の下にボタンを並べる */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          <h1 className="min-w-0 text-xl font-semibold break-words sm:pt-2">{message.subject || "(件名なし)"}</h1>
+        {/* 本文の列が狭いときは、件名の下にボタンを並べ、それでも入らなければ折り返す。画面の幅ではなく列の幅で決める(一覧や右パネルを開くと列が狭くなるため) */}
+        <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start @2xl:justify-between @2xl:gap-4">
+          <h1 className="min-w-0 text-xl font-semibold break-words @2xl:pt-2">{message.subject || "(件名なし)"}</h1>
           <MarkSeen key={message.id} mailbox={box.slug} uid={message.uid} seen={message.seen === 1} />
-          <div className="flex shrink-0 items-start gap-3 self-end sm:gap-4 sm:self-auto">
+          <div className="flex max-w-full flex-wrap items-start justify-end gap-2 self-end @2xl:shrink-0 @2xl:flex-nowrap @2xl:gap-4 @2xl:self-auto">
             {/* 整理: 栞に聞く・挟む・捨てる・済ませる */}
             <AssistButton
               key={`ai-${message.id}`}
@@ -142,7 +142,7 @@ async function MessageView({ params }: { params: Promise<{ mailbox: string; uid:
               </>
             ) : null}
             {/* 整理と応答の区切り。ボタンの高さ(下の名前は除く)に合わせる */}
-            <span aria-hidden="true" className="mx-1 mt-1.5 h-10 w-px bg-line" />
+            <span aria-hidden="true" className="mx-0.5 mt-1.5 h-10 w-px bg-line @2xl:mx-1" />
             {/* 応答: ふだんは返信。転送のようにたまにしか使わないものは「…」にしまう */}
             <div className="flex shrink-0 flex-col items-center gap-1">
               <Link href={`/compose?reply=${message.id}`} aria-label="返信" title="返信" className={aquaClass("solid", "md")}>
