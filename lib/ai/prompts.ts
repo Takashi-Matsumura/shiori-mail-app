@@ -391,3 +391,56 @@ ${mails.join("\n\n")}`,
     },
   ];
 }
+
+/**
+ * リンクを開く前の、栞の見立て(app/link/page.tsx)。数字の確率ではなく、3 段階と理由の言葉で出す。
+ * 栞はリンク先を開けないので、材料は URL・表示の文字・差出人・機械的な手がかりだけ。メールの本文は渡さない
+ * (本文に「このリンクは安全です」と AI 向けに書かれても、判断を動かされないように)。
+ */
+export const LINK_VERDICTS = ["危険そう", "気になる点あり", "特に気になる点なし"] as const;
+export type LinkAssessment = { verdict: (typeof LINK_VERDICTS)[number]; reason: string };
+export type LinkAssessmentResponse = { assessment: LinkAssessment | null; error?: string };
+
+export const linkAssessmentSchema = {
+  type: "object",
+  properties: {
+    verdict: { type: "string", enum: LINK_VERDICTS },
+    reason: { type: "string" },
+  },
+  required: ["verdict", "reason"],
+  additionalProperties: false,
+} as const;
+
+export function linkAssessmentPrompt(link: { url: string; text: string; sender: string; checks: string[] }): ChatMessage[] {
+  const tag = newTag();
+  const line = (s: string, max: number) => s.replace(/[\r\n]+/g, " ").slice(0, max);
+  const content = `行き先の URL: ${line(link.url, 1000)}
+メールに表示されていた文字: ${line(link.text, 200) || "(なし)"}
+差出人のアドレス: ${line(link.sender, 320) || "(不明)"}
+機械的に見つかった手がかり: ${link.checks.length ? link.checks.map((c) => line(c, 200)).join(" / ") : "(なし)"}`;
+  return [
+    system(tag),
+    {
+      role: "user",
+      content: `受信者がメールの中のリンクを開こうとしています。下の情報だけから、フィッシングや詐欺のリンクらしさを見立ててください。
+あなたはリンク先を開けません。下の情報に書かれていないことは推測で補わないでください。
+verdict:
+- 「危険そう」: 有名な会社やサービスを装ったドメイン、表示の文字と行き先の食い違い、ログインや支払いへ急がせるような URL など、偽物らしい手がかりがある
+- 「気になる点あり」: 偽物とまでは言えないが、確かめてから開いたほうがよい点がある
+- 「特に気になる点なし」: 差出人とリンク先の組み合わせが自然で、偽物らしい手がかりが無い
+- 迷ったら「気になる点あり」にする。安全だと言い切らない
+reason: 見立ての理由を日本語で 60 文字程度。前置きは書かない
+
+<${tag}>
+${content.replaceAll(tag, "")}
+</${tag}>`,
+    },
+  ];
+}
+
+/** AI の返した見立てを、画面に出せる形にそろえる。形が合わなければ null */
+export function normalizeLinkAssessment(value: unknown): LinkAssessment | null {
+  const v = value as { verdict?: unknown; reason?: unknown } | null;
+  if (!v || !(LINK_VERDICTS as readonly unknown[]).includes(v.verdict) || typeof v.reason !== "string") return null;
+  return { verdict: v.verdict as LinkAssessment["verdict"], reason: v.reason.replace(/[\r\n]+/g, " ").trim().slice(0, 120) };
+}

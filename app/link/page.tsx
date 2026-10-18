@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { InfoButton } from "@/components/info-button";
+import { LinkAssessmentNote } from "@/components/link-assessment";
 import { LinkCloseButton } from "@/components/link-close-button";
 import { ShioriLogo } from "@/components/shiori-logo";
 import { HELP } from "@/lib/help-texts";
@@ -98,6 +99,9 @@ async function LinkCheck({ searchParams }: Pick<PageProps<"/link">, "searchParam
           目立った手がかりは見つかりませんでした。それでも、ログインやカード番号を求められたら、行き先が本物かを確かめてください。
         </p>
       )}
+
+      {/* 栞の見立ては、アプリの署名が合うリンクだけ(第三者が作ったリンクで AI を動かさせない) */}
+      {signed ? <LinkAssessmentNote u={url.href} t={text} s={sender} spam={spam} k={one(params.k)} /> : null}
 
       <div className="flex flex-wrap items-center gap-3">
         {/* 危険の手がかりがあるときは、開くほうを目立たせない */}

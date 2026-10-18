@@ -5,7 +5,8 @@ import { siteFor } from "@/lib/auth/site";
 
 // ログインしていなくても開ける入口。パスキーの API は、それぞれの中で登録の可否などを確かめる。
 // /link はメールのリンクを開く前の確認ページ。メールの iframe から開くタブにはログインの Cookie が付かないので入口に含める(メールのデータは読まない)
-const PUBLIC_PATHS = new Set(["/login", "/link", "/api/auth/login", "/api/auth/register", "/api/auth/logout"]);
+// /api/link/assess は /link に出す栞の見立て。メールの画面が付けた署名の合うリンクだけを受ける
+const PUBLIC_PATHS = new Set(["/login", "/link", "/api/link/assess", "/api/auth/login", "/api/auth/register", "/api/auth/logout"]);
 // localhost と公開ホスト(MAILER_PUBLIC_HOST)以外の名前で届いたリクエストは断る。
 // 悪意あるサイトの DNS リバインディングで、localhost のこのアプリを読まれないように
 const LOOPBACK_ALIASES = new Set(["127.0.0.1", "[::1]"]);
