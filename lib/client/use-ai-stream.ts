@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import type { StreamEvent } from "@/lib/ai/stream";
+import { lockIfUnauthorized } from "@/lib/client/lock";
 
 export type StreamMeta = { ms: number; model?: string; promptTokens?: number | null; completionTokens?: number | null };
 
@@ -34,6 +35,7 @@ export function useAiStream(onDone?: () => void) {
           body: JSON.stringify(body),
           signal: ac.signal,
         });
+        if (lockIfUnauthorized(res.status)) return;
         if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
         const reader = res.body.getReader();
         const decoder = new TextDecoder();

@@ -47,8 +47,13 @@ export async function proxy(request: NextRequest) {
 
   const isPageView = request.method === "GET" && request.headers.get("sec-fetch-dest") === "document";
   // セッションを延ばすのは、画面を開いたときと、画面が送る操作の知らせ(components/idle-lock.tsx)だけ。
-  // 自動同期・AI の処理・Server Action では延ばさない(放っておいた画面でセッションが延び続けないように)
-  const touch = isPageView || (request.method === "POST" && pathname === ACTIVITY_PATH);
+  // 自動同期・AI の処理・Server Action では延ばさない(放っておいた画面でセッションが延び続けないように)。
+  // さらに、このアプリ自身から来たものに限る。Cookie は SameSite=Strict でも同じサイト(兄弟サブドメイン、localhost の別ポート)には
+  // 付くので、そこから 1 分ごとに知らせを送られると無操作でも延び続けてしまう。
+  // same-origin のほか、URL を直接開いたとき(none)と、ヘッダを送らない古いブラウザ(null)は通す
+  const fetchSite = request.headers.get("sec-fetch-site");
+  const ownRequest = fetchSite === null || fetchSite === "same-origin" || (isPageView && fetchSite === "none");
+  const touch = ownRequest && (isPageView || (request.method === "POST" && pathname === ACTIVITY_PATH));
   if (validateSession(request.cookies.get(sessionCookieName(site))?.value, { touch })) return NextResponse.next();
 
   // 画面の表示ならログイン画面へ。それ以外(API・Server Action・RSC の取得)は 401 で断る

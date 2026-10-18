@@ -12,3 +12,27 @@ export async function lockAndGoToLogin(next?: string) {
 export function currentPath() {
   return location.pathname + location.search;
 }
+
+/**
+ * API の応答が 401(サーバ側でセッションが切れている)なら、その場でロックする。
+ * 切れたあとも画面にメールが残り続けないように、API を呼ぶところはこれを通す。ロックしたら true
+ */
+export function lockIfUnauthorized(status: number): boolean {
+  if (status !== 401) return false;
+  void lockAndGoToLogin(currentPath());
+  return true;
+}
+
+/**
+ * セッションがまだ有効かをサーバに確かめ、切れていればロックする。最終アクセスは進めない。
+ * 自動処理が失敗したときや、裏に回っていた画面が戻ってきたときに呼ぶ(iOS Safari は裏のタイマーを止めるので、
+ * 画面側の無操作の時計だけでは、サーバ側の期限切れに気づけない)
+ */
+export async function checkSession(): Promise<void> {
+  try {
+    const res = await fetch("/api/auth/session", { cache: "no-store" });
+    lockIfUnauthorized(res.status);
+  } catch {
+    // 通信できないときは判断できないので、何もしない
+  }
+}

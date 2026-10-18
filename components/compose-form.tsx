@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { sendAction, type SendState } from "@/app/actions";
 import { AiMeta } from "@/components/ai-meta";
+import { lockIfUnauthorized } from "@/lib/client/lock";
 import { AddressInput, type ContactOption } from "@/components/address-input";
 import { AquaButton } from "@/components/aqua-button";
 import { AttachmentPreview, type PreviewTarget } from "@/components/attachment-preview";
@@ -739,6 +740,7 @@ function useSubjectSuggestions() {
         body: JSON.stringify(payload),
         signal: ac.signal,
       });
+      if (lockIfUnauthorized(res.status)) return;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result = (await res.json()) as SubjectResponse;
       if (controller.current === ac) setState({ status: "done", ...result });
