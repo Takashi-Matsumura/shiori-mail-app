@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { passedAccess } from "@/lib/auth/access";
 import { SESSION_COOKIE, validateSession } from "@/lib/auth/session";
 import { siteFor } from "@/lib/auth/site";
 
@@ -9,7 +10,7 @@ const PUBLIC_PATHS = new Set(["/login", "/link", "/api/auth/login", "/api/auth/r
 // 悪意あるサイトの DNS リバインディングで、localhost のこのアプリを読まれないように
 const LOOPBACK_ALIASES = new Set(["127.0.0.1", "[::1]"]);
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // request.url は待ち受けアドレス(127.0.0.1)で組み立てられているので、ブラウザが開いている名前は Host ヘッダから取る
   const host = request.headers.get("host") ?? "";
   if (!URL.canParse(`http://${host}`)) return new NextResponse("Bad Request", { status: 400 });
@@ -28,6 +29,11 @@ export function proxy(request: NextRequest) {
       `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${html}"><a href="${html}">${html}</a>`,
       { headers: { "content-type": "text/html; charset=utf-8" } },
     );
+  }
+
+  // 公開ホストは Cloudflare Access を通ったものだけ。ログイン画面やパスキーの API も含め、Access の手前からは何も見せない
+  if (site.rpId !== "localhost" && !(await passedAccess(request.headers))) {
+    return new NextResponse("Forbidden", { status: 403 });
   }
 
   const { pathname, search } = request.nextUrl;
