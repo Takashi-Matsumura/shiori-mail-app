@@ -4,7 +4,17 @@ import type { AiConfig } from "@/lib/ai/config";
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 export type Usage = { promptTokens: number | null; completionTokens: number | null };
 
-export class AiError extends Error {}
+/**
+ * AI まわりの失敗。perMessage は「この 1 通に対する応答がおかしかった」失敗で、ほかのメールは処理を続けてよい。
+ * それ以外(接続できない・モデルが無い・サーバのエラー)は、残りのメールも同じ理由で失敗するので一括処理を止める
+ */
+export class AiError extends Error {
+  readonly perMessage: boolean;
+  constructor(message: string, options: { perMessage?: boolean } = {}) {
+    super(message);
+    this.perMessage = options.perMessage ?? false;
+  }
+}
 
 const CHAT_TIMEOUT_MS = 180_000;
 
@@ -206,11 +216,11 @@ function extractJson(text: string): unknown {
   const clean = stripThink(text).replace(/^```(?:json)?\s*|\s*```$/g, "");
   const start = clean.indexOf("{");
   const end = clean.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new AiError("AI の応答から JSON を取り出せませんでした。");
+  if (start < 0 || end <= start) throw new AiError("AI の応答から JSON を取り出せませんでした。", { perMessage: true });
   try {
     return JSON.parse(clean.slice(start, end + 1));
   } catch {
-    throw new AiError("AI の応答が JSON として壊れていました。");
+    throw new AiError("AI の応答が JSON として壊れていました。", { perMessage: true });
   }
 }
 

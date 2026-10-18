@@ -42,6 +42,16 @@ CREATE TABLE IF NOT EXISTS ai_results (
   UNIQUE (message_id, kind)
 );
 
+-- AI の応答がそのメールに限っておかしかった記録。一括処理はこれを見て読み飛ばし、1 通の失敗で残りが止まらないようにする
+CREATE TABLE IF NOT EXISTS ai_failures (
+  message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 1,
+  last_error TEXT NOT NULL,
+  last_tried INTEGER NOT NULL,
+  PRIMARY KEY (message_id, kind)
+);
+
 CREATE TABLE IF NOT EXISTS embeddings (
   message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
   model TEXT NOT NULL,
