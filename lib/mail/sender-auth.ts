@@ -1,5 +1,6 @@
 import "server-only";
 import { getDomain } from "tldts";
+import { getRealAccountFields } from "@/lib/accounts";
 
 /**
  * 差出人(From)が偽装されていないかを、受信サーバの認証結果(Authentication-Results、RFC 8601)から読む。
@@ -20,7 +21,11 @@ const DEFAULT_AUTHSERV_IDS = ["mx.google.com"];
 
 function trustedAuthservIds(): string[] {
   const env = process.env.MAILER_AUTHSERV_IDS?.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-  return env?.length ? env : DEFAULT_AUTHSERV_IDS;
+  if (env?.length) return env;
+  // 既定の Gmail は、受信サーバが Gmail のときだけ信じる。ほかのサーバから受けているのに mx.google.com を信じると、
+  // 送り手が書いた偽の「mx.google.com; dmarc=fail」が一番上に来て、正当なメールに「危険」を出させられる
+  const imapHost = getRealAccountFields().imapHost.toLowerCase();
+  return /(^|\.)(gmail|googlemail)\.com$/.test(imapHost) ? DEFAULT_AUTHSERV_IDS : [];
 }
 
 type MethodResult = { method: string; result: string; props: Map<string, string> };

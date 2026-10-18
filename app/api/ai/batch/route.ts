@@ -18,6 +18,7 @@ const RUNNERS: Record<BatchKind, (m: MessageRow) => Promise<{ ms: number; summar
 // 1 通のために同じ失敗を 5 分ごとに繰り返したり、それより古いメールの処理が止まったりしないように
 const RETRY_AFTER_MS = 24 * 60 * 60_000;
 const MAX_ATTEMPTS = 3;
+const MAX_PER_RUN = 100;
 // 未処理の読み飛ばし条件(messages m に対して)
 const NOT_SKIPPED_SQL = `NOT EXISTS (SELECT 1 FROM ai_failures f WHERE f.message_id = m.id AND f.kind = ? AND (f.attempts >= ? OR f.last_tried > ?))`;
 
@@ -69,15 +70,16 @@ export async function POST(request: Request) {
   if (!account) return new Response("アカウントが未設定です", { status: 409 });
   // id 指定なら 1 通だけ(やり直しを含む。読み飛ばし中でも実行する)、無ければ未処理をすべて
   const single = body?.id !== undefined;
-  const ids = single ? [Number(body!.id)] : pendingIds(account.id, kind);
+  // 1 回のリクエストで処理する件数には上限を置く。残りは次の自動処理(5 分ごと)が拾う
+  const ids = single ? [Number(body!.id)] : pendingIds(account.id, kind).slice(0, MAX_PER_RUN);
   if (ids.some((id) => !Number.isInteger(id))) return new Response("Bad Request", { status: 400 });
 
   return ndjsonResponse(async (send) => {
     const started = Date.now();
     let done = 0;
     for (const id of ids) {
-      // 閉じられたタブのために処理を続けない
-      if (request.signal.aborted) return;
+      // 閉じられたタブのために処理を続けない。ロックやログアウトでセッションが消えたときも、そこで止める
+      if (request.signal.aborted || !(await isAuthenticated())) return;
       const m = await getMessageById(account.id, id);
       if (!m) continue;
       try {
