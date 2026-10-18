@@ -10,6 +10,7 @@ const PUBLIC_PATHS = new Set(["/login", "/link", "/api/link/assess", "/api/auth/
 // localhost と公開ホスト(MAILER_PUBLIC_HOST)以外の名前で届いたリクエストは断る。
 // 悪意あるサイトの DNS リバインディングで、localhost のこのアプリを読まれないように
 const LOOPBACK_ALIASES = new Set(["127.0.0.1", "[::1]"]);
+const ACTIVITY_PATH = "/api/auth/activity";
 
 export async function proxy(request: NextRequest) {
   // request.url は待ち受けアドレス(127.0.0.1)で組み立てられているので、ブラウザが開いている名前は Host ヘッダから取る
@@ -44,10 +45,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (validateSession(request.cookies.get(sessionCookieName(site))?.value)) return NextResponse.next();
+  const isPageView = request.method === "GET" && request.headers.get("sec-fetch-dest") === "document";
+  // セッションを延ばすのは、画面を開いたときと、画面が送る操作の知らせ(components/idle-lock.tsx)だけ。
+  // 自動同期・AI の処理・Server Action では延ばさない(放っておいた画面でセッションが延び続けないように)
+  const touch = isPageView || (request.method === "POST" && pathname === ACTIVITY_PATH);
+  if (validateSession(request.cookies.get(sessionCookieName(site))?.value, { touch })) return NextResponse.next();
 
   // 画面の表示ならログイン画面へ。それ以外(API・Server Action・RSC の取得)は 401 で断る
-  const isPageView = request.method === "GET" && request.headers.get("sec-fetch-dest") === "document";
   if (!isPageView) return new NextResponse("Unauthorized", { status: 401 });
   const login = new URL("/login", site.origin);
   login.searchParams.set("next", pathname + search);

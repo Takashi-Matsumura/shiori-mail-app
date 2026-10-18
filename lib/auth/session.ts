@@ -32,8 +32,12 @@ export function createSession(): string {
   return token;
 }
 
-/** Cookie の値が有効なセッションか。有効なら最終アクセスを進める。 */
-export function validateSession(token: string | undefined): boolean {
+/**
+ * Cookie の値が有効なセッションか。touch を付けたときだけ最終アクセスを進める。
+ * 進めるのは利用者の操作(画面を開く・操作の知らせ)だけ。自動同期や AI の処理のリクエストで進めると、
+ * 画面を開いたまま放っておいたときにセッションが延び続け、無操作でのロックがサーバ側で効かなくなる。
+ */
+export function validateSession(token: string | undefined, { touch = false }: { touch?: boolean } = {}): boolean {
   if (!token) return false;
   const db = getDb();
   const key = hash(token);
@@ -46,7 +50,7 @@ export function validateSession(token: string | undefined): boolean {
     db.prepare("DELETE FROM sessions WHERE token_hash = ?").run(key);
     return false;
   }
-  if (now - row.last_seen > TOUCH_MS) db.prepare("UPDATE sessions SET last_seen = ? WHERE token_hash = ?").run(now, key);
+  if (touch && now - row.last_seen > TOUCH_MS) db.prepare("UPDATE sessions SET last_seen = ? WHERE token_hash = ?").run(now, key);
   return true;
 }
 
