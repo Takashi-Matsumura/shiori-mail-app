@@ -11,8 +11,8 @@ const INTERVAL_MS = 3 * 60_000;
 const g = globalThis as unknown as { __mailerBackgroundSync?: NodeJS.Timeout };
 
 /**
- * 通知を受け取る端末が登録されている間だけ、定期的にサーバと同期して新着を通知する。
- * AI の仕分けはここではしない(画面を開いたときに、いつもの自動処理が行う)。
+ * 通知を受け取る端末が登録されている間だけ、定期的にサーバと同期し、新着を栞に仕分けさせて「要返信」を通知する。
+ * 仕分け以外の AI の処理(予定の抜き出しなど)はここではしない(画面を開いたときに、いつもの自動処理が行う)。
  */
 export function startBackgroundSync(): void {
   if (DEMO || g.__mailerBackgroundSync) return;
