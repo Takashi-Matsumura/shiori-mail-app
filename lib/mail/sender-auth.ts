@@ -25,24 +25,36 @@ function trustedAuthservIds(): string[] {
 
 type MethodResult = { method: string; result: string; props: Map<string, string> };
 
-/** `dkim=pass header.i=@x.example header.s=sel` のような 1 区切りを、方式・結果・付随する値に分ける */
+/**
+ * `dkim=pass header.i=@x.example header.s=sel` のような 1 区切りを、方式・結果・付随する値に分ける。
+ * 空白で区切る簡単な読み方なので、引用符を含む値(`"a b"@x.example` のような送信元アドレス)は区切りがずれて読み違えうる。
+ * そうした区切りと、同じ名前の値が 2 度出る区切りは、丸ごと読まない(読まなければ「成功」には数えないので、安全側に倒れる)
+ */
 function parseResult(segment: string): MethodResult | null {
+  if (segment.includes('"')) return null;
   const tokens = segment.trim().split(/\s+/).filter(Boolean);
   const head = tokens.shift()?.match(/^([a-z0-9-]+)=([a-z]+)$/i);
   if (!head) return null;
   const props = new Map<string, string>();
   for (const t of tokens) {
     const eq = t.indexOf("=");
-    if (eq > 0) props.set(t.slice(0, eq).toLowerCase(), t.slice(eq + 1));
+    if (eq <= 0) continue;
+    const key = t.slice(0, eq).toLowerCase();
+    if (props.has(key)) return null;
+    props.set(key, t.slice(eq + 1));
   }
   return { method: head[1].toLowerCase(), result: head[2].toLowerCase(), props };
 }
 
-/** `@x.example`・`user@x.example`・`x.example` のどれでも、組織を表すドメイン(登録ドメイン)にそろえる */
+/**
+ * `@x.example`・`user@x.example`・`x.example` のどれでも、組織を表すドメイン(登録ドメイン)にそろえる。
+ * github.io のように誰でも下にサイトやアドレスを持てるドメインも区切りにする(allowPrivateDomains)。
+ * そうしないと evil.github.io の署名で victim.github.io を名乗れてしまう
+ */
 function orgDomain(value: string | undefined): string | null {
   if (!value) return null;
   const host = value.slice(value.lastIndexOf("@") + 1).toLowerCase().replace(/\.$/, "");
-  return host ? (getDomain(host) ?? host) : null;
+  return host ? (getDomain(host, { allowPrivateDomains: true }) ?? host) : null;
 }
 
 export function senderAuthFrom(headerLines: readonly { key: string; line: string }[], fromAddr: string | undefined): SenderAuth {
@@ -67,8 +79,9 @@ export function senderAuthFrom(headerLines: readonly { key: string; line: string
   if (!from) return "unverified";
   const aligned = results.some((r) => {
     if (r.result !== "pass") return false;
+    // DKIM は署名したドメイン(header.d)を優先し、無ければ header.i。SPF は smtp.mailfrom だけ(HELO は From とは別物なので比べない)
     if (r.method === "dkim") return orgDomain(r.props.get("header.d") ?? r.props.get("header.i")) === from;
-    if (r.method === "spf") return orgDomain(r.props.get("smtp.mailfrom") ?? r.props.get("smtp.helo")) === from;
+    if (r.method === "spf") return orgDomain(r.props.get("smtp.mailfrom")) === from;
     return false;
   });
   return aligned ? "ok" : "unverified";
