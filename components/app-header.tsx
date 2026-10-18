@@ -1,18 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { ShioriLogo } from "@/components/shiori-logo";
+import { lockAndGoToLogin } from "@/lib/client/lock";
 import { useNotices, type Notice } from "@/lib/client/notices";
-
-async function lock() {
-  await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-  // メールの内容を抱えたクライアント側のキャッシュを捨てたいので、ルーターの遷移ではなく読み込み直す
-  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-  window.location.assign("/login");
-}
 
 /** 画面上端の帯。同期や自動処理など、画面のどこから起きたかに関わらず利用者に伝えたいことをここに出す。 */
 export function AppHeader() {
   const { notices, dismiss } = useNotices();
+  // ログイン画面へ移るまで少し間があるので、押せたことがわかるようにスピナーに替えておく。移った先で読み込み直すので戻さない
+  const [locking, setLocking] = useState(false);
   const errors = notices.filter((n) => n.kind === "error");
   const others = notices.filter((n) => n.kind !== "error");
   return (
@@ -36,16 +33,29 @@ export function AppHeader() {
       </div>
       <button
         type="button"
-        onClick={lock}
-        title="ロックして、次は Touch ID で開く"
-        aria-label="ロック"
-        className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-line text-muted hover:bg-background hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent"
+        onClick={() => {
+          setLocking(true);
+          void lockAndGoToLogin();
+        }}
+        disabled={locking}
+        aria-busy={locking}
+        title={locking ? "ロックしています…" : "ロックして、次は Touch ID で開く"}
+        aria-label={locking ? "ロックしています" : "ロック"}
+        className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-line text-muted hover:bg-background hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-wait disabled:hover:bg-transparent disabled:hover:text-muted"
       >
-        {/* 南京錠 */}
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <rect x="4.5" y="10.5" width="15" height="10" rx="2" />
-          <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
-        </svg>
+        {locking ? (
+          // スピナー
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" className="animate-spin text-accent">
+            <circle cx="12" cy="12" r="8.5" opacity="0.25" />
+            <path d="M12 3.5a8.5 8.5 0 0 1 8.5 8.5" />
+          </svg>
+        ) : (
+          // 南京錠
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="4.5" y="10.5" width="15" height="10" rx="2" />
+            <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+          </svg>
+        )}
       </button>
     </header>
   );

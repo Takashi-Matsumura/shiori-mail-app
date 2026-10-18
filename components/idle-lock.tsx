@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { currentPath, lockAndGoToLogin } from "@/lib/client/lock";
 
 // サーバ側のセッション(lib/auth/session.ts の IDLE_MS)と同じ長さにそろえる。
 // 画面を開いたままだと自動同期のリクエストでセッションが延び続けるので、操作の有無は画面側で見る
@@ -11,12 +12,7 @@ const EVENTS = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
 export function IdleLock() {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
-    const lock = async () => {
-      await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-      // メールの内容を抱えたクライアント側のキャッシュを捨てたいので、ルーターの遷移ではなく読み込み直す
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.assign(`/login?next=${encodeURIComponent(location.pathname + location.search)}`);
-    };
+    const lock = () => lockAndGoToLogin(currentPath());
     const reset = () => {
       clearTimeout(timer);
       timer = setTimeout(lock, IDLE_MS);
