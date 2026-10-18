@@ -1,5 +1,6 @@
 import "server-only";
 import { simpleParser, type AddressObject } from "mailparser";
+import { senderAuthFrom, type SenderAuth } from "@/lib/mail/sender-auth";
 
 export type ParsedMail = {
   messageId: string | null;
@@ -14,6 +15,8 @@ export type ParsedMail = {
   text: string;
   html: string | null;
   attachments: { filename: string; contentType: string; size: number }[];
+  /** 差出人の認証結果(lib/mail/sender-auth.ts) */
+  senderAuth: SenderAuth;
 };
 
 function addressText(a: AddressObject | AddressObject[] | undefined): string {
@@ -69,6 +72,7 @@ export async function parseRaw(raw: Buffer): Promise<ParsedMail> {
       contentType: a.contentType,
       size: a.size,
     })),
+    senderAuth: senderAuthFrom(mail.headerLines),
   };
 }
 

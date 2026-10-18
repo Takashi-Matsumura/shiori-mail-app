@@ -11,6 +11,7 @@ import {
 import { isSameOrigin } from "@/lib/ai/stream";
 import { checkLink, parseLink, type LinkWarning } from "@/lib/mail/link-check";
 import { isValidLinkSignature } from "@/lib/mail/link-sig";
+import { parseSenderAuth } from "@/lib/mail/sender-auth";
 
 // 同じリンクを開き直すたびに AI を呼ばないよう、見立てをしばらく覚えておく
 const CACHE_MAX = 200;
@@ -40,7 +41,7 @@ function clampToChecks(assessment: LinkAssessment, levels: LinkWarning["level"][
  * リンクの確認ページ(/link)に出す、栞の見立て。確認ページと同じくログインなしで呼べる
  * (メールの iframe から開いたタブには、ログインの Cookie が付かないことがある)。
  * その代わり、メールの画面が付けた署名(k)が合うリンクだけを受ける。第三者が作ったリンクで AI を動かさせない。
- * body: { u, t, s, spam, k }(確認ページの URL と同じ値)
+ * body: { u, t, s, spam, a, k }(確認ページの URL と同じ値)
  */
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return new Response("Forbidden", { status: 403 });
@@ -48,19 +49,20 @@ export async function POST(request: Request) {
   const field = (name: string, max: number) => (typeof body?.[name] === "string" ? (body[name] as string).slice(0, max) : "");
   const sender = field("s", 320);
   const spam = body?.spam === true;
-  if (!isValidLinkSignature(sender, spam, field("k", 64))) return new Response("Forbidden", { status: 403 });
+  const auth = parseSenderAuth(body?.a);
+  if (!isValidLinkSignature({ sender, spam, auth }, field("k", 64))) return new Response("Forbidden", { status: 403 });
   const url = parseLink(field("u", 4000));
   if (!url) return new Response("Bad Request", { status: 400 });
   const text = field("t", 200);
 
-  const key = createHash("sha256").update(JSON.stringify([url.href, text, sender, spam])).digest("hex");
+  const key = createHash("sha256").update(JSON.stringify([url.href, text, sender, spam, auth])).digest("hex");
   const cached = cache.get(key);
   if (cached) return Response.json({ assessment: cached } satisfies LinkAssessmentResponse);
 
   if (!allowCall()) {
     return Response.json({ assessment: null, error: "栞への問い合わせが続いています。少し待ってから開き直してください。" } satisfies LinkAssessmentResponse);
   }
-  const warnings = checkLink({ url, text, sender, spam });
+  const warnings = checkLink({ url, text, sender, spam, senderAuth: auth });
   const checks = warnings.map((w) => `${w.level}: ${w.message}`);
   try {
     const r = await chatJson(getAiConfig(), linkAssessmentPrompt({ url: url.href, text, sender, checks }), "link_assessment", linkAssessmentSchema);

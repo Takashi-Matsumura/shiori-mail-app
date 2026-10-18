@@ -6,6 +6,7 @@ import { ShioriLogo } from "@/components/shiori-logo";
 import { HELP } from "@/lib/help-texts";
 import { checkLink, parseLink, registrableDomain, type LinkWarning } from "@/lib/mail/link-check";
 import { isValidLinkSignature } from "@/lib/mail/link-sig";
+import { parseSenderAuth } from "@/lib/mail/sender-auth";
 
 /**
  * メールの中のリンクを開く前の確認ページ。本当の行き先とフィッシングの手がかりを見せ、「このサイトを開く」を押して初めて外へ移る。
@@ -49,11 +50,12 @@ async function LinkCheck({ searchParams }: Pick<PageProps<"/link">, "searchParam
   const host = url.hostname;
   const domain = registrableDomain(host);
   const sub = host.endsWith(domain) ? host.slice(0, host.length - domain.length) : "";
-  // 差出人と迷惑の判定は、アプリが署名したものだけ信じる。署名が合わないリンクはメールの画面以外で作られたもの
+  // 差出人・迷惑の判定・差出人の認証結果は、アプリが署名したものだけ信じる。署名が合わないリンクはメールの画面以外で作られたもの
   // (第三者が警告の出ない確認ページを装っている可能性がある)なので、差出人を使わずに強く警告する
   const sender = one(params.s).slice(0, 320);
   const spam = one(params.spam) === "1";
-  const signed = isValidLinkSignature(sender, spam, one(params.k));
+  const auth = parseSenderAuth(one(params.a));
+  const signed = isValidLinkSignature({ sender, spam, auth }, one(params.k));
   const warnings = [
     ...(signed
       ? []
@@ -63,7 +65,7 @@ async function LinkCheck({ searchParams }: Pick<PageProps<"/link">, "searchParam
             message: "このリンクは、Shiori Mail がメールの画面で作ったものではありません。差出人や迷惑の判定を確かめられないので、心当たりがなければ開かないでください。",
           } as const,
         ]),
-    ...checkLink({ url, text, sender: signed ? sender : "", spam: signed && spam }),
+    ...(signed ? checkLink({ url, text, sender, spam, senderAuth: auth }) : checkLink({ url, text, sender: "", spam: false })),
   ];
   const danger = warnings.some((w) => w.level === "危険");
 
@@ -101,7 +103,7 @@ async function LinkCheck({ searchParams }: Pick<PageProps<"/link">, "searchParam
       )}
 
       {/* 栞の見立ては、アプリの署名が合うリンクだけ(第三者が作ったリンクで AI を動かさせない) */}
-      {signed ? <LinkAssessmentNote u={url.href} t={text} s={sender} spam={spam} k={one(params.k)} /> : null}
+      {signed ? <LinkAssessmentNote u={url.href} t={text} s={sender} spam={spam} a={auth} k={one(params.k)} /> : null}
 
       <div className="flex flex-wrap items-center gap-3">
         {/* 危険の手がかりがあるときは、開くほうを目立たせない */}

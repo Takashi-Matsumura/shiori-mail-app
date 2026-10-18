@@ -2,6 +2,7 @@
 // ここでの判定は手がかりにすぎない。見つからなかったからといって安全とは限らない。
 
 import { getDomain } from "tldts";
+import { SENDER_AUTH_WARNING, type SenderAuth } from "@/lib/mail/sender-auth";
 
 export type LinkWarning = { level: "危険" | "注意" | "参考"; message: string };
 
@@ -41,8 +42,25 @@ export function parseLink(raw: string): URL | null {
   }
 }
 
-export function checkLink({ url, text, sender, spam }: { url: URL; text: string; sender: string; spam: boolean }): LinkWarning[] {
+export function checkLink({
+  url,
+  text,
+  sender,
+  spam,
+  senderAuth = "ok",
+}: {
+  url: URL;
+  text: string;
+  sender: string;
+  spam: boolean;
+  senderAuth?: SenderAuth;
+}): LinkWarning[] {
   const warnings: LinkWarning[] = [];
+  // 差出人が偽装されていそうなら、そう伝えたうえで、差出人とリンク先の比較には使わない(偽の差出人に合わせたリンクで安心させない)
+  if (senderAuth !== "ok") {
+    warnings.push(SENDER_AUTH_WARNING[senderAuth]);
+    sender = "";
+  }
   const host = url.hostname.toLowerCase();
   const domain = registrableDomain(host);
 
