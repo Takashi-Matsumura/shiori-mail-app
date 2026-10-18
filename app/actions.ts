@@ -96,6 +96,16 @@ export async function setSeenAction(mailbox: MailboxSlug, uid: number, seen: boo
 
 export type SendState = { ok: true; result: SendResult; to: string } | { ok: false; message: string } | null;
 
+/**
+ * 自分で付けた添付の種類。ブラウザが送ってきた値をそのまま使わず、`type/subtype` の形で、multipart と message 以外のものだけ通す。
+ * multipart/* を渡すと nodemailer がその添付を multipart として組み立て、メール全体の形が壊れる
+ */
+function safeAttachmentType(type: string): string {
+  const t = type.trim().toLowerCase();
+  if (!/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(t) || t.startsWith("multipart/") || t.startsWith("message/")) return "application/octet-stream";
+  return t;
+}
+
 const ADDRESS_FORBIDDEN = /[\s<>,;"]/;
 
 /**
@@ -174,7 +184,7 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
     attachments.push({
       // ファイル名はヘッダに入るので、改行と、パスの区切りに見える文字を落とす
       filename: f.name.replace(/[\r\n\\/]/g, "_").slice(0, 200) || "file",
-      contentType: f.type || "application/octet-stream",
+      contentType: safeAttachmentType(f.type),
       content: Buffer.from(await f.arrayBuffer()),
     });
   }

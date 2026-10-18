@@ -26,7 +26,9 @@ self.addEventListener("push", (event) => {
 // 通知をタップしたら、そのメールを開く。開いている画面があればそれを使う
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = new URL(event.notification.data?.url ?? "/mail/inbox", self.location.origin).href;
+  // 開くのはこのアプリの中だけ。通知の中身を作れるのはサーバだけだが、念のため別のサイトへは飛ばさない
+  const target = new URL(event.notification.data?.url ?? "/mail/inbox", self.location.origin);
+  const url = target.origin === self.location.origin ? target.href : new URL("/mail/inbox", self.location.origin).href;
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });

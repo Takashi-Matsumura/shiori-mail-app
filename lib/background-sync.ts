@@ -19,11 +19,13 @@ export function startBackgroundSync(): void {
   let busy = false;
   let lastError = "";
   g.__mailerBackgroundSync = setInterval(async () => {
-    if (busy || !hasSubscriptions()) return;
-    const account = getAccount();
-    if (!account) return;
+    if (busy) return;
     busy = true;
     try {
+      // DB の読み出しも try の中で行う(例外が unhandledRejection として 3 分ごとにログへ出ないように)
+      if (!hasSubscriptions()) return;
+      const account = getAccount();
+      if (!account) return;
       await syncAccount(account);
       await notifyNewMail(account);
       lastError = "";

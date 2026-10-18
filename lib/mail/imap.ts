@@ -243,9 +243,13 @@ export async function setSeenFlag(account: Account, slug: MailboxSlug, uid: numb
     db.prepare("UPDATE messages SET seen = ? WHERE id = ?").run(seen ? 1 : 0, row.id);
     return;
   }
+  // 手元に無い UID(消えたメール、でたらめな番号)はサーバへ送らない
+  const known = getDb().prepare("SELECT 1 FROM messages WHERE account = ? AND mailbox = ? AND uid = ?").get(account.id, slug, uid);
+  if (!known) return;
   await withImap(account, async (client) => {
     const lock = await client.getMailboxLock(await resolvePath(client, account, slug));
     try {
+      assertUidValidity(client, account, slug);
       if (seen) await client.messageFlagsAdd([uid], ["\\Seen"], { uid: true });
       else await client.messageFlagsRemove([uid], ["\\Seen"], { uid: true });
     } finally {
@@ -273,6 +277,19 @@ export class TrashError extends Error {}
  * メールをサーバのゴミ箱(\Trash)へ移し、手元の控えも消す。完全には消さないので、ゴミ箱から戻せる。
  * ゴミ箱が見つからないときは、取り返しのつかない削除(EXPUNGE)はせずに止める。
  */
+/**
+ * 開いているフォルダの UIDVALIDITY が、手元のメールを取り込んだときと同じかを確かめる。
+ * サーバが UID を振り直していると、手元の UID は別のメールを指す。そのまま既読を付けたりゴミ箱へ移したりすると、違うメールを操作してしまう
+ */
+function assertUidValidity(client: ImapFlow, account: Account, slug: MailboxSlug): void {
+  const mailbox = client.mailbox;
+  const current = mailbox && typeof mailbox === "object" ? String(mailbox.uidValidity) : null;
+  const expected = getSetting(`uidvalidity:${account.id}:${slug}`);
+  if (!current || !expected || current !== expected) {
+    throw new TrashError("メールサーバ側で番号が振り直されています。「サーバと同期」をしてから、もう一度お試しください。");
+  }
+}
+
 export async function moveToTrash(account: Account, slug: MailboxSlug, uids: number[]): Promise<void> {
   if (account.readOnly) throw new TrashError("読み取り専用モードではメールを削除しません");
   if (uids.length === 0) return;
@@ -286,6 +303,7 @@ export async function moveToTrash(account: Account, slug: MailboxSlug, uids: num
     }
     const lock = await client.getMailboxLock(await resolvePath(client, account, slug));
     try {
+      assertUidValidity(client, account, slug);
       const moved = await client.messageMove(uids, trash.path, { uid: true });
       if (!moved) throw new TrashError("ゴミ箱へ移せませんでした。");
     } finally {
