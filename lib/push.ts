@@ -159,13 +159,16 @@ export async function notifyNewMail(account: Account): Promise<void> {
   setSetting(LAST_NOTIFIED, String(rows[rows.length - 1].id));
   if (targets.length === 0 || !hasSubscriptions()) return;
 
-  const sender = (r: Row) => r.from_name || r.from_addr || "(差出人なし)";
+  // 差出人名と件名は送り手が決める値なので長さを抑える。通知の中身が約 4KB を超えると、プッシュサーバが受け取らず通知が落ちる
+  const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
+  const sender = (r: Row) => clip(r.from_name || r.from_addr || "(差出人なし)", 60);
+  const subject = (r: Row) => clip(r.subject || "(件名なし)", 120);
   const label = (r: Row) => (r.category ? r.category : "仕分けできなかった新着");
   const payloads: Payload[] =
     targets.length <= MAX_SEPARATE
       ? targets.map((r) => ({
           title: `${label(r)}: ${sender(r)}`,
-          body: r.subject || "(件名なし)",
+          body: subject(r),
           url: `/mail/inbox/${r.uid}`,
           tag: `mail-${r.id}`,
         }))
@@ -175,7 +178,7 @@ export async function notifyNewMail(account: Account): Promise<void> {
             body: targets
               .slice(-MAX_SEPARATE)
               .reverse()
-              .map((r) => `${sender(r)}: ${r.subject || "(件名なし)"}`)
+              .map((r) => `${sender(r)}: ${subject(r)}`)
               .join("\n"),
             url: "/mail/inbox",
             tag: "mail-summary",
