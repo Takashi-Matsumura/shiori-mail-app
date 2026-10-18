@@ -19,13 +19,9 @@ const CHALLENGE_TTL_MS = 5 * 60_000;
 type Kind = "register" | "login";
 type PasskeyRow = { id: string; public_key: Uint8Array; counter: number; transports: string | null };
 
-/** rpId を渡せばその名前のパスキーだけ、省けばどれか 1 つでもあるか */
-export function hasPasskeys(rpId?: string): boolean {
-  const db = getDb();
-  const row = rpId
-    ? db.prepare("SELECT 1 FROM passkeys WHERE rp_id = ? LIMIT 1").get(rpId)
-    : db.prepare("SELECT 1 FROM passkeys LIMIT 1").get();
-  return Boolean(row);
+/** その名前(RP ID)のパスキーが 1 つでもあるか */
+export function hasPasskeys(rpId: string): boolean {
+  return Boolean(getDb().prepare("SELECT 1 FROM passkeys WHERE rp_id = ? LIMIT 1").get(rpId));
 }
 
 function listPasskeys(rpId: string): PasskeyRow[] {
@@ -80,14 +76,13 @@ export async function registrationOptions(site: Site) {
 }
 
 /**
- * firstOnly は未ログインでの登録(初回)。検証を待つ間に別の登録が先に保存されることがあるので、
- * 「まだ 1 つも無いとき」の確認と保存を 1 つの INSERT で行い、すでにあれば保存しない。
- * invite は招待での登録。検証が通ったときに使い切り、使えなければ保存しない。
+ * invite は未ログインでの登録(招待)。検証が通ったときに使い切り、使えなければ保存しない
+ * (使い切りは 1 つの DELETE なので、同じ招待で 2 つは登録できない)。
  */
 export async function verifyRegistration(
   response: RegistrationResponseJSON,
   site: Site,
-  { firstOnly, invite }: { firstOnly: boolean; invite?: string },
+  invite?: string,
 ): Promise<boolean> {
   const { verified, registrationInfo } = await verifyRegistrationResponse({
     response,
@@ -100,10 +95,7 @@ export async function verifyRegistration(
   if (invite !== undefined && !consumeInvite(invite)) return false;
   const { credential } = registrationInfo;
   const res = getDb()
-    .prepare(
-      `INSERT INTO passkeys (id, rp_id, public_key, counter, transports, created) SELECT ?, ?, ?, ?, ?, ?
-       WHERE ? = 0 OR NOT EXISTS (SELECT 1 FROM passkeys)`,
-    )
+    .prepare("INSERT INTO passkeys (id, rp_id, public_key, counter, transports, created) VALUES (?, ?, ?, ?, ?, ?)")
     .run(
       credential.id,
       site.rpId,
@@ -111,7 +103,6 @@ export async function verifyRegistration(
       credential.counter,
       credential.transports ? JSON.stringify(credential.transports) : null,
       Date.now(),
-      firstOnly ? 1 : 0,
     );
   return res.changes === 1;
 }

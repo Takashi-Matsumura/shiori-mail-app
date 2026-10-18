@@ -10,7 +10,7 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "ai:eval": "node scripts/eval-classifier.mts",
-    "auth:reset": "node scripts/reset-passkeys.mts",
+    "auth:reset": "node --env-file-if-exists=.env.local scripts/reset-passkeys.mts",
     "auth:invite": "node --env-file-if-exists=.env.local scripts/invite-passkey.mts",
     "demo:seed": "node scripts/seed-demo.mts",
     "demo:dev": "MAILER_DEMO=1 next dev -H 127.0.0.1"
