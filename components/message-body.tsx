@@ -171,14 +171,26 @@ function Body({ messageId, senderAddr, spam, senderAuth, linkSig, text, html, at
 }
 
 const URL_IN_TEXT = /https?:\/\/[^\s<>"'）」』】]+/g;
+// 文末の句読点や閉じ括弧は URL に含めない。正規表現 `[...]+$` は長い URL で 2 乗の時間がかかるので、末尾から 1 文字ずつ外す
+const URL_TRAILERS = new Set([".", ",", ";", ":", "!", "?", ")", "]", "、", "。"]);
+// 1 画面で描く本文の上限。これより長いメールは先頭だけを出す(送り手が本文の長さを決められるため)
+const TEXT_RENDER_LIMIT = 200_000;
+
+function trimTrailers(url: string): string {
+  let end = url.length;
+  while (end > 0 && URL_TRAILERS.has(url[end - 1])) end--;
+  return url.slice(0, end);
+}
 
 /** テキスト本文の URL を、確認ページを通して開くリンクにする(文字列のまま組み立て、HTML としては解釈しない) */
-function LinkedText({ text, linkFor }: { text: string; linkFor: (url: string, text: string) => string }) {
+function LinkedText({ text: full, linkFor }: { text: string; linkFor: (url: string, text: string) => string }) {
+  const truncated = full.length > TEXT_RENDER_LIMIT;
+  const text = truncated ? full.slice(0, TEXT_RENDER_LIMIT) : full;
   const parts: React.ReactNode[] = [];
   let last = 0;
   for (const m of text.matchAll(URL_IN_TEXT)) {
-    // 文末の句読点や閉じ括弧は URL に含めない
-    const url = m[0].replace(/[.,;:!?)\]、。]+$/, "");
+    const url = trimTrailers(m[0]);
+    if (!url) continue;
     const start = m.index;
     parts.push(text.slice(last, start));
     parts.push(
@@ -189,5 +201,6 @@ function LinkedText({ text, linkFor }: { text: string; linkFor: (url: string, te
     last = start + url.length;
   }
   parts.push(text.slice(last));
+  if (truncated) parts.push(<span key="truncated" className="block pt-2 text-muted">(本文が長いため、ここまでを表示しています)</span>);
   return <>{parts}</>;
 }

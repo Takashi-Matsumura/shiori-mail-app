@@ -87,11 +87,23 @@ export async function setSeenAction(mailbox: MailboxSlug, uid: number, seen: boo
 
 export type SendState = { ok: true; result: SendResult; to: string } | { ok: false; message: string } | null;
 
-const ADDRESS = /^[^\s@<>,;"]+@[^\s@<>,;"]+\.[^\s@<>,;"]+$/;
+const ADDRESS_FORBIDDEN = /[\s<>,;"]/;
+
+/**
+ * メールアドレスの形か。`@` がちょうど 1 つで、その後ろ(ドメイン)に `.` が両端以外にあり、空白・`<>,;"` を含まない。
+ * 以前の正規表現 `^[^…]+@[^…]+\.[^…]+$` は、`.` の多い長い入力で 2 乗の時間がかかった
+ */
+function isAddress(a: string): boolean {
+  const at = a.indexOf("@");
+  if (at <= 0 || at !== a.lastIndexOf("@") || ADDRESS_FORBIDDEN.test(a)) return false;
+  const domain = a.slice(at + 1);
+  const dot = domain.indexOf(".");
+  return dot > 0 && dot < domain.length - 1;
+}
 
 function parseAddressList(value: string): string[] | null {
   const list = value.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
-  return list.every((a) => ADDRESS.test(a)) ? list : null;
+  return list.every(isAddress) ? list : null;
 }
 
 export async function sendAction(_prev: SendState, formData: FormData): Promise<SendState> {
@@ -103,7 +115,7 @@ export async function sendAction(_prev: SendState, formData: FormData): Promise<
   const subject = field("subject").trim();
   // 引用(返信)と転送するメールは本文欄の外にあるので、ここで本文の末尾へ付ける
   const quote = field("quote").replace(/\r\n?/g, "\n");
-  const body = field("body").replace(/\s+$/, "");
+  const body = field("body").trimEnd();
   const text = [body.trim() ? body : "", quote].filter(Boolean).join("\n\n");
   if (!to || to.length === 0) return { ok: false, message: "宛先のメールアドレスを確認してください(複数ならカンマ区切り)。" };
   if (!cc) return { ok: false, message: "Cc のメールアドレスを確認してください。" };
@@ -235,8 +247,8 @@ export async function saveSettingsAction(_prev: ActionState, formData: FormData)
   setSetting("ai_chat_model", field("aiChatModel"));
   setSetting("ai_embed_model", field("aiEmbedModel"));
   // 署名は行頭の空白や途中の空行も意味があるので、末尾の空白・改行だけを落とす
-  setSetting(SIGNATURE_KEY, String(formData.get("signature") ?? "").replace(/\r\n?/g, "\n").replace(/\s+$/, "").slice(0, 2000));
-  setSetting(FORWARD_INTRO_KEY, String(formData.get("forwardIntro") ?? "").replace(/\r\n?/g, "\n").replace(/\s+$/, "").slice(0, 2000));
+  setSetting(SIGNATURE_KEY, String(formData.get("signature") ?? "").replace(/\r\n?/g, "\n").trimEnd().slice(0, 2000));
+  setSetting(FORWARD_INTRO_KEY, String(formData.get("forwardIntro") ?? "").replace(/\r\n?/g, "\n").trimEnd().slice(0, 2000));
   refresh();
   if (!getAccount()) {
     return { ok: true, message: "保存しました。メールを使うには、アドレス・パスワード・IMAP / SMTP のサーバをすべて入力してください。" };
