@@ -1,11 +1,11 @@
 "use client";
 
 import { useId } from "react";
-import { useStoredFlag } from "@/lib/client/use-stored-flag";
+import { usePanelCollapsed } from "@/lib/client/use-panel-collapsed";
 
 /**
  * 畳める左右のパネル。畳むと細い帯になり、開くボタンと rail(要点だけの表示)が残る。
- * 開閉の状態はブラウザに保存する(畳んだまま再読み込みすると、一瞬だけ開いて見える)。
+ * 開閉の状態はブラウザに保存する(畳んだまま再読み込みすると、一瞬だけ開いて見える)。右パネルは xl 未満では最初から畳む(lib/client/use-panel-collapsed.ts)。
  * 狭い画面では隠す(左は md 未満、右は lg 未満)。スマホ幅では、代わりに画面下のタブ(MobileNav)を出す。
  * 隠しても中身は外さないので、左パネルの自動処理(AutoRunner)は動き続ける。
  */
@@ -16,7 +16,7 @@ export function SidePanel({ side, label, rail, children }: {
   children: React.ReactNode;
 }) {
   const id = useId();
-  const [collapsed, setCollapsed] = useStoredFlag(`side-panel:${side}`, false);
+  const [collapsed, setCollapsed] = usePanelCollapsed(side);
   const toggle = () => setCollapsed(!collapsed);
   // 矢印は、押したときにパネルの端が動く向き
   const arrow = (side === "left") === collapsed ? "»" : "«";
