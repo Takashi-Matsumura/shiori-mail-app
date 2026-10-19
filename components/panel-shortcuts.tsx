@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { InfoDialog } from "@/components/info-button";
-import { useStoredFlag } from "@/lib/client/use-stored-flag";
+import { usePanelCollapsed } from "@/lib/client/use-panel-collapsed";
 
 const SHORTCUTS = [
   { keys: ["←"], description: "左のパネルを開く/畳む" },
@@ -26,9 +26,9 @@ ${SHORTCUTS.map(({ keys, description }) => `| ${keys.map((k) => `\`${k}\``).join
  * 文字を打っている最中や、修飾キーと一緒に押したとき、ダイアログを開いているときは何もしない。
  */
 export function PanelShortcuts() {
-  // SidePanel と同じキーで開閉の状態を共有する
-  const [leftCollapsed, setLeftCollapsed] = useStoredFlag("side-panel:left", false);
-  const [rightCollapsed, setRightCollapsed] = useStoredFlag("side-panel:right", false);
+  // SidePanel と開閉の状態を共有する
+  const [leftCollapsed, setLeftCollapsed] = usePanelCollapsed("left");
+  const [rightCollapsed, setRightCollapsed] = usePanelCollapsed("right");
   const [helpOpen, setHelpOpen] = useState(false);
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
